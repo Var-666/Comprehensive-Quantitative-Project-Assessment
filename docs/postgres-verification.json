@@ -1,0 +1,6 @@
+{
+  "database": "PostgreSQL 16 official image",
+  "migration_roundtrip": "passed",
+  "sample_seed": "passed",
+  "pytest": "passed"
+}

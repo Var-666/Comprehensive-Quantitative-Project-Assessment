@@ -1,0 +1,27 @@
+# 第一阶段逐项验收
+
+基线：[PHASE1_BASELINE.md](PHASE1_BASELINE.md)。验收日期：2026-10-20。以下第一阶段要求均已实现并通过对应技术验收。
+
+| 原始要求 | 实现与验证依据 |
+| --- | --- |
+| 前后端工程、环境变量、连接、统一返回 | backend/app、frontend/src、.env.example、health；真实 API 调用及构建 |
+| 格式、错误处理、日志、迁移、脚本、README | Ruff/Prettier、统一异常、request_id、Alembic迁移往返、scripts/check.sh |
+| 项目列表与分页、创建、修改、详情、状态/类型筛选 | pytest 项目 CRUD/唯一性/筛选用例；浏览器创建修改与刷新 |
+| 项目编号唯一、持久化 | 数据库唯一约束；独立 Session 读回、重复创建与幂等导入测试 |
+| 项目节点查询、创建、编辑、详情 | 节点 API、NodeForm、NodeDetail，API与浏览器工作流 |
+| 类型与责任部门 | node_types、departments 外键及 Schema校验；样本与表单选择 |
+| 计划与实际分离、核实状态 | milestone_plan_items / milestone_actual_records；提交/核实独立测试 |
+| 版本基础管理、时间轴、变更留痕 | 全量版本快照、只读历史、时间轴、audit_events，旧版日期保留测试 |
+| Excel 上传、类型/结构、字段映射 | 文件/ZIP大小、工作表/表头、字段映射、公式输入与异常文件测试 |
+| 错误行预览、重复编号检测、确认后入库 | ImportDialog、原始行与校验错误记录、确认复选框、原子写入测试 |
+| 防重复创建及无意覆盖、结果/失败原因记录 | 编号唯一、Idempotency-Key、预览后冲突二次检查、批次审计与错误CSV |
+| P-H028/P-H031/P-H014模拟数据 | 显式 seed，67节点逐项来源日期/核实事实核对；生产禁用sample seed |
+| 事务、并发、关键状态日志 | Session事务、版本锁、数据库CHECK/唯一索引，实际事实矛盾与并发覆盖测试 |
+| OpenAPI与前后端分层 | Schema / services / imports / auth，FastAPI文档，Vue API层与Pinia |
+| 登录、项目授权、自审分离 | 账号/会话/项目角色；401/403/404隔离、角色撤销、过期、CSRF、自审及伪造actor测试 |
+| PostgreSQL目标数据库 | 官方16镜像实测迁移往返、alembic check、样本与全部业务测试 |
+| 七菜单、布局、状态、滚动、桌面支持 | 沿用Figma令牌；第一阶段页面实接API，其余页面明确未实现；桌面宽度和错误状态浏览器测试 |
+
+最终回归：SQLite **23 passed**、真实PostgreSQL **23 passed**；本地Chrome **4组通过**；真实Docker三容器栈 **4组通过**；数据库容器重启数据保持一致；前端构建、类型检查、格式和迁移检查均通过。未跳过上述测试；保留并披露一条Starlette测试客户端的依赖弃用警告。
+
+完成判定：第一阶段按原始功能要求及本轮用户确认基线完成技术交付和验收。缺失的原始计划书/需求说明书未冒充已读取；企业SSO、组织同步、正式证据附件及生产域名需按实际环境配置，不扩张为本阶段新功能。第二、三阶段未开发，未计入上述完成结果。
