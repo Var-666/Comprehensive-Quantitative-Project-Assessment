@@ -51,6 +51,12 @@ const nav = [
           }"
           ><Icon :name="item.icon" />{{ item.title }}</RouterLink
         >
+        <RouterLink
+          v-if="auth.user.is_system_admin"
+          to="/settings/llm"
+          :class="{ active: route.path.startsWith('/settings') }"
+          ><Icon name="settings" />系统设置</RouterLink
+        >
       </nav>
       <div class="sidebar-foot">
         <p>第一期 · 项目与执行管理</p>

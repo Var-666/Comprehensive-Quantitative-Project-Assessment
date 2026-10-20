@@ -9,7 +9,7 @@ from fastapi import HTTPException
 from pydantic import SecretStr
 from sqlalchemy import select
 
-from app import ai_service
+from app import ai_service, llm_provider
 from app.config import settings
 from app.evaluation_models import FinancialActual
 from app.models import ActualRecord, Milestone, PlanVersion, Project, ProjectMember
@@ -301,6 +301,10 @@ def test_real_adapter_contract_rejects_invented_facts_without_fallback(monkeypat
         ("ai_api_key", SecretStr("test-secret")),
     ]:
         monkeypatch.setattr(settings, name, value)
+    monkeypatch.setattr(settings, "llm_allowed_origins", "https://model.invalid")
+    monkeypatch.setattr(
+        llm_provider, "resolve_host", lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 443))]
+    )
     calls = []
 
     def handler(request):

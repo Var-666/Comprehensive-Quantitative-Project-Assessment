@@ -1,0 +1,22 @@
+# Local-only HTTPS overlay. Run init_llm_security.py first. Use enterprise TLS/Secrets in production.
+services:
+  backend:
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --ssl-certfile /run/local-secrets/localhost.crt --ssl-keyfile /run/local-secrets/localhost.key"]
+    environment:
+      COOKIE_SECURE: "true"
+      ALLOWED_ORIGINS: https://127.0.0.1:5173,https://127.0.0.1:8000
+      LLM_ENCRYPTION_KEY_FILE: /run/local-secrets/llm-master.key
+      LLM_ALLOWED_ORIGINS: ${LLM_ALLOWED_ORIGINS:-https://maas-api.cmhk.com}
+      LLM_PRIVATE_ORIGINS: ${LLM_PRIVATE_ORIGINS:-}
+    volumes:
+      - ./.local-secrets:/run/local-secrets:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; urllib.request.urlopen('https://127.0.0.1:8000/api/v1/health',context=ssl.create_default_context(cafile='/run/local-secrets/localhost.crt'),timeout=3)"]
+  frontend:
+    environment:
+      API_PROXY_TARGET: https://backend:8000
+      VITE_TLS_CERT_FILE: /run/local-secrets/localhost.crt
+      VITE_TLS_KEY_FILE: /run/local-secrets/localhost.key
+      NODE_EXTRA_CA_CERTS: /run/local-secrets/localhost.crt
+    volumes:
+      - ./.local-secrets:/run/local-secrets:ro

@@ -13,7 +13,6 @@ from sqlalchemy import select
 from . import ai_service, auth, finance, metrics, reports
 from . import services as svc
 from . import workflow as wf
-from .config import settings
 from .evaluation_models import FinancialAccess, FinancialActual, MetricSnapshot, ReportDraft
 from .evaluation_schemas import (
     AssistInput,
@@ -24,6 +23,7 @@ from .evaluation_schemas import (
     ReviewInput,
     SnapshotInput,
 )
+from .llm_service import LLMService
 from .models import Credential, Project
 from .schemas import VerifyInput
 from .workflow_models import Notification
@@ -74,23 +74,8 @@ def collection(db, principal, as_of):
 
 def register(app, Db, ok):
     @app.get("/api/v1/ai/config")
-    def ai_config(request: Request):
-        return ok(
-            request,
-            {
-                "provider": settings.ai_provider,
-                "external_enabled": settings.ai_external_enabled,
-                "configured": settings.ai_provider == "mock"
-                or bool(
-                    settings.ai_base_url
-                    and settings.ai_model
-                    and settings.ai_api_key.get_secret_value()
-                ),
-                "mode_label": "Mock · 无真实模型连接"
-                if settings.ai_provider == "mock"
-                else "真实模型辅助事实分类整理",
-            },
-        )
+    def ai_config(request: Request, db: Db):
+        return ok(request, LLMService.describe(db))
 
     @app.get("/api/v1/metrics/summary")
     def summary(
@@ -412,7 +397,9 @@ def register(app, Db, ok):
                     "text": f"{action['title']}；完成判定及核实依据：{action['completion_criteria']}。",
                 }
             )
-        arranged, meta = ai_service.arrange(facts, data.allow_external)
+        arranged, meta = ai_service.arrange(
+            facts, data.allow_external, db=db, scenario="notification"
+        )
         before = svc.record(obj)
         obj.body = ai_service.render(facts, arranged, "节点工作通知草稿", meta)
         obj.status = "draft"

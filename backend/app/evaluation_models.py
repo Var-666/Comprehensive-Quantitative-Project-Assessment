@@ -110,7 +110,7 @@ class ReportDraft(Identity, Base):
     report_type: Mapped[str] = mapped_column(String(30))
     fact_bundle_json: Mapped[dict] = mapped_column(JSON)
     generator_type: Mapped[str] = mapped_column(String(25))
-    model_id: Mapped[str | None] = mapped_column(String(120))
+    model_id: Mapped[str | None] = mapped_column(String(256))
     content: Mapped[str] = mapped_column(Text)
     validation_json: Mapped[dict] = mapped_column(JSON)
     contains_finance: Mapped[bool] = mapped_column(Boolean, default=False)

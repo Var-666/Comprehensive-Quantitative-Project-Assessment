@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 (cd backend && ../.venv/bin/alembic upgrade head)
 api_port="${API_PORT:-8000}"
-(cd backend && exec ../.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "$api_port") &
+(cd backend && LLM_ALLOW_LOCAL_HTTP_CREDENTIALS="${LLM_ALLOW_LOCAL_HTTP_CREDENTIALS:-true}" exec ../.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "$api_port") &
 api_pid=$!
 (cd frontend && API_PROXY_TARGET="http://127.0.0.1:$api_port" exec ./node_modules/.bin/vite --host 127.0.0.1) &
 ui_pid=$!

@@ -1,4 +1,4 @@
-# 项目总体量化评估智能体 · V0.3.0
+# 项目总体量化评估智能体 · V0.4.0
 
 第一、二、三阶段版本：Vue 3 / TypeScript / Vite / Pinia / Vue Router + FastAPI / SQLAlchemy / Alembic。页面连接真实 API 与数据库，所有业务接口强制登录、项目授权与服务端权限校验。计划编制人与批准人、实际提交人与核实人必须分离。验收基线已由用户于2026-10-20确认，见 [第一阶段基线](docs/PHASE1_BASELINE.md) 与 [逐项验收表](docs/PHASE1_ACCEPTANCE.md)。
 
@@ -211,3 +211,59 @@ cd backend
 | 模型配置/通知整理 | `GET /ai/config`（无密钥）、`POST /notifications/{id}/ai-draft` |
 
 报告提交/审核、财务核实和通知整理要求 If-Match。报告与通知模型整理最多持有一次请求的项目事务锁和配置超时（默认20秒），以避免审核/授权撤销和生成之间竞态；无后台自动外送或自动重试。当前报表按计算时已核实事实复算截止日，不提供历史知情时间重放或完整会计台账。
+
+
+## 系统设置 · 大模型配置
+
+新增独立“系统设置”导航，仅系统管理员可见；原七个业务模块保持原流程。配置预置 `https://maas-api.cmhk.com/v1`，不预置模型名称或API Key。完整接口、权限、兼容迁移及测试依据见 [大模型配置交付记录](docs/LLM_CONFIGURATION.md)。
+
+密钥必须通过HTTPS提交。本机首次准备并启动：
+
+```bash
+.venv/bin/pip install -r backend/requirements.lock.txt
+npm --prefix frontend ci
+./scripts/dev-https.sh
+```
+
+浏览器访问 **https://127.0.0.1:5175/settings/llm**，API文档 **https://127.0.0.1:8002/docs**。本机脚本生成自签开发证书，浏览器需信任该本机证书；仅供本地开发，正式环境使用企业认可的可信TLS证书。
+
+按用户后续要求，本机也可直接使用 **http://127.0.0.1:5173/settings/llm**：运行 `./scripts/dev.sh`（本机8000端口被占用时使用 `API_PORT=8001 ./scripts/dev.sh`）。该脚本显式设置 `LLM_ALLOW_LOCAL_HTTP_CREDENTIALS=true`，只对development/test环境、回环客户端及localhost/127.0.0.1/::1主机开放Key管理，保留管理员权限、CSRF、加密与脱敏要求；不读取X-Forwarded-For作为例外依据。生产环境即使打开此开关也拒绝HTTP提交。可用 `LLM_ALLOW_LOCAL_HTTP_CREDENTIALS=false ./scripts/dev.sh`关闭例外。初次使用仍须初始化加密主密钥，方法见下文。
+
+`init_llm_security.py` 仅生成加密主密钥与本地TLS证书，不生成企业API Key。主密钥保存在忽略Git/Docker构建的 `.local-secrets/llm-master.key`（0600），`.env`只保存其路径引用。生产由部署环境注入 `LLM_ENCRYPTION_KEY` 或受控 `LLM_ENCRYPTION_KEY_FILE`；妥善保管并备份主密钥，丢失后不能解密既有Key，需重新配置凭据。API Key只通过页面加密写数据库，不放配置文件。
+
+操作顺序：
+
+1. 系统管理员进入“系统设置”，确认服务地址并保存。URL仅允许部署白名单中的精确HTTPS域名与端口。
+2. “设置 / 更换 Key”输入真实账户Key，保存后页面只显示配置状态和更新时间。
+3. “测试连接”检查服务与凭据；“刷新模型列表”查询实际 `/models`，随后自动串行验证尚未通过当前凭据验证的已启用模型，每模型执行一次短调用。页面显示进度与结果，已通过模型跳过；单模型权限/格式问题不妨碍其余模型，认证失败、限流、网络或服务异常暂停批次。可点击“停止后续测试”，离开页面也不再发起后续调用，已完成结果保留。服务端刷新API仍只负责发现；自动调度由网页复用既有模型测试API完成，不是常驻后台任务。401/403/404/429/5xx及网络错误分别提示；404不当作Key无效。
+4. 自动列表不可用时，“手动添加模型”填写服务商提供的准确ID，仍可单独点“测试模型”验证或重测。每次最多128个输出token；推理模型会先消耗思考token，若达到上限，明确提示截断，不误报格式不兼容、不自动重试或标记可用。列表来自账户授权，自动测试仅验证当前文本生成接口，向量/重排模型可能不适用于该场景。
+5. 已启用且通过当前凭据调用测试的模型才可选为默认或业务场景模型；“项目阶段智能分析”和“通知与工作安排草稿”可分别选择或跟随默认模型。引用中的模型不能直接禁用或删除，先改选或取消引用。
+6. 选择真实MaaS模式并启用业务调用。报告和通知仍要求本次明确同意外送，且仅传事实ID/类别/类型。模型不修改项目、合同、计划、实际资金或评价结果。
+
+配置变更立即用于新请求，无需重启；在途请求可继续使用开始时的配置。更换Key会将模型验证状态重置为未测试，重测后使用新Key；移除Key停止后续实际调用。地址变更清除旧Key及默认/场景选择，并隔离旧地址模型。操作审计与调用日志均脱敏，不记录Key、提示词、正文或平台原始异常。
+
+优先级：**数据库管理员配置 > 旧环境配置 > 初始Mock**。无管理员配置时兼容原有 `AI_*` 环境模式；发现旧配置时必须明确确认接管，或通过“迁移旧环境配置”加密导入。迁移后的模型为手动未测试、实际调用关闭；已有管理员配置不允许被旧环境覆盖，Web移除Key后不会回退环境Key。`AI_EXTERNAL_ENABLED`适用于旧环境模式；数据库模式由管理员的启用操作授权，业务每次外送同意仍保留。
+
+旧环境的安全自定义地址会原样显示；若未列入新白名单，页面明确提示运维授权，阻止保存Key、迁移和调用，不会自动改成CMHK地址。SQLite升级需3.35或更新版本；迁移保留既有报告、审核关系与检查约束，回滚遇到超长模型ID会停止，避免截断历史来源。
+
+部署地址安全：`LLM_ALLOWED_ORIGINS`默认仅 `https://maas-api.cmhk.com`，可由运维显式扩展精确HTTPS origin；如获准域名解析到企业专用内网，还需在 `LLM_PRIVATE_ORIGINS`显式授权。回环、云元数据、链路本地和保留地址始终拒绝，不跟随重定向，不关闭TLS验证、不读取环境代理。企业平台若不是该兼容格式，应依据实际文档扩展 `llm_provider.py`，目前不声称已验证CMHK全部兼容。
+
+本机代理若把该域名解析为 `198.18.0.0/15` 虚拟IP，也会触发非公网限制。先确认准确域名和TLS连接；获授权后在本机 `.env` 设置 `LLM_PRIVATE_ORIGINS=https://maas-api.cmhk.com` 并重启后端即可复用现有策略。无需把Key写回 `.env`、修改全局代理或关闭TLS验证；该授权只覆盖准确origin，不自动授权其他域名、端口或重定向目标。
+
+可选本机HTTPS容器栈：
+
+```bash
+.venv/bin/python scripts/init_llm_security.py
+# 先配置POSTGRES_PASSWORD；仅本机开发证书和挂载，不是正式部署模板。
+docker compose -f compose.yaml -f compose.https.yaml up --build -d
+# 访问 https://127.0.0.1:5173/settings/llm
+```
+
+新增验证命令：
+
+```bash
+npm --prefix frontend run test:llm
+.venv/bin/python scripts/verify_llm_https.py
+```
+
+HTTPS浏览器测试使用独立的 `browser_llm_app` 测试入口与MockTransport，仅允许APP_ENV=test，不在产品入口启用。结果与真实CMHK平台连接严格区分；真实Key未配置时不会请求平台，也不会显示连接成功。`test:llm`的Chrome仅信任本地测试自签证书，MaaS客户端TLS验证保持开启。

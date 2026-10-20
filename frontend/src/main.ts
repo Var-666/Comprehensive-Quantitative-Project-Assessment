@@ -10,6 +10,7 @@ import MetricsView from "./views/MetricsView.vue";
 import AnalysisView from "./views/AnalysisView.vue";
 import ActionsView from "./views/ActionsView.vue";
 import WorkflowsView from "./views/WorkflowsView.vue";
+import LLMSettingsView from "./views/LLMSettingsView.vue";
 import "./style.css";
 
 const router = createRouter({
@@ -34,6 +35,11 @@ const router = createRouter({
       path: "/analysis",
       component: AnalysisView,
       meta: { title: "AI 智能分析" },
+    },
+    {
+      path: "/settings/llm",
+      component: LLMSettingsView,
+      meta: { title: "系统设置" },
     },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],

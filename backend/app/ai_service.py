@@ -2,12 +2,11 @@
 
 import json
 from typing import Literal
-from urllib.parse import urlparse
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .config import settings
+from .llm_service import LLMService
 from .services import fail
 
 client_factory = httpx.Client
@@ -29,13 +28,14 @@ class Arrangement(BaseModel):
     ] = Field(max_length=4)
 
 
-def arrange(facts, allow_external=False):
+def arrange(facts, allow_external=False, *, db=None, scenario="analysis"):
+    runtime = LLMService.runtime(db, scenario)
     if any(
         sum(f["section"] == section for f in facts) > 100 for section in ("overview", "attention")
     ):
         fail(422, "FACT_BUNDLE_TOO_LARGE", "事实分组超过100项，请缩小报告范围")
     allowed = {f["id"] for f in facts}
-    if settings.ai_provider == "mock":
+    if runtime.provider == "mock":
         result = Arrangement(
             overview=[f["id"] for f in facts if f["section"] == "overview"],
             attention=[f["id"] for f in facts if f["section"] == "attention"],
@@ -48,22 +48,10 @@ def arrange(facts, allow_external=False):
             "label": "Mock · 确定性事实整理，无真实模型连接",
             "external_transmission": False,
         }
-    if not settings.ai_external_enabled or not allow_external:
+    if not runtime.external_enabled or not allow_external:
         fail(
             409, "EXTERNAL_AI_NOT_AUTHORIZED", "真实模型调用需部署配置允许且本次显式授权事实包外送"
         )
-    endpoint = urlparse(settings.ai_base_url)
-    if (
-        endpoint.scheme != "https"
-        or not endpoint.netloc
-        or endpoint.username
-        or endpoint.password
-        or endpoint.query
-        or endpoint.fragment
-        or not settings.ai_model
-        or not settings.ai_api_key.get_secret_value()
-    ):
-        fail(503, "MODEL_NOT_CONFIGURED", "请在环境变量配置HTTPS模型地址、模型名称和密钥")
     # No names, dates, money amounts or document references leave the application.
     # The provider only sees symbolic fact descriptors, sufficient for classification/order.
     descriptors = [{k: f[k] for k in ("id", "section", "kind")} for f in facts]
@@ -71,7 +59,7 @@ def arrange(facts, allow_external=False):
     for name in ("overview", "attention"):
         schema["properties"][name]["items"] = {"type": "string", "enum": sorted(allowed)}
     body = {
-        "model": settings.ai_model,
+        "model": runtime.model_id,
         "messages": [
             {
                 "role": "system",
@@ -84,25 +72,15 @@ def arrange(facts, allow_external=False):
             "json_schema": {"name": "fact_arrangement", "strict": True, "schema": schema},
         },
     }
+    raw = LLMService.chat(
+        runtime, body["messages"], body["response_format"], db, scenario, client_factory
+    )
+    if raw.get("finish_reason") != "stop":
+        fail(502, "MODEL_OUTPUT_INVALID", "模型输出不完整，未生成报告")
     try:
-        with client_factory(
-            timeout=settings.ai_timeout_seconds, follow_redirects=False, trust_env=False
-        ) as client:
-            response = client.post(
-                settings.ai_base_url.rstrip("/") + "/chat/completions",
-                headers={"Authorization": "Bearer " + settings.ai_api_key.get_secret_value()},
-                json=body,
-            )
-            if response.status_code != 200:
-                fail(503, "MODEL_UNAVAILABLE", "模型服务不可用，未生成报告；可重试或明确切换Mock")
-            if len(response.content) > 128_000:
-                fail(502, "MODEL_OUTPUT_INVALID", "模型响应超过限制")
-            raw = response.json()["choices"][0]
-            if raw.get("finish_reason") != "stop":
-                fail(502, "MODEL_OUTPUT_INVALID", "模型输出不完整或拒绝生成")
-            result = Arrangement.model_validate_json(raw["message"]["content"])
-    except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, ValidationError):
-        fail(503, "MODEL_UNAVAILABLE", "模型网络或输出校验失败；未静默降级为Mock")
+        result = Arrangement.model_validate_json(raw["message"]["content"])
+    except (ValueError, KeyError, TypeError, ValidationError):
+        fail(502, "MODEL_OUTPUT_INVALID", "模型输出未通过结构校验，未静默降级Mock")
     for section, key in [("overview", "overview"), ("attention", "attention")]:
         expected = {f["id"] for f in facts if f["section"] == section}
         actual = getattr(result, key)
@@ -114,7 +92,9 @@ def arrange(facts, allow_external=False):
         fail(502, "MODEL_OUTPUT_INVALID", "模型不能添加未提供的财务分析")
     return result, {
         "generator_type": "llm_assisted",
-        "model_id": settings.ai_model,
+        "model_id": runtime.model_id,
+        "configuration_source": runtime.source,
+        "configuration_revision": runtime.revision,
         "label": "真实模型辅助分类整理 · 正文事实由后端渲染",
         "external_transmission": True,
         "outbound_fields": ["id", "section", "kind"],

@@ -129,7 +129,12 @@ def generate(db, project, snapshot, data, key, request_id):
         finance.summary(db, project.id, snapshot.as_of_date) if data.include_finance else None
     )
     facts = bundle(snapshot, financial, data.report_type)
-    arranged, meta = ai_service.arrange(facts["facts"], data.allow_external)
+    arranged, meta = ai_service.arrange(
+        facts["facts"],
+        data.allow_external,
+        db=db,
+        scenario="notification" if data.report_type == "work_plan" else "analysis",
+    )
     content = ai_service.render(
         facts["facts"],
         arranged,

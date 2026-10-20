@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     ai_api_key: SecretStr = SecretStr("")
     ai_external_enabled: bool = False
     ai_timeout_seconds: float = Field(default=20, ge=1, le=60)
+    llm_encryption_key: SecretStr = SecretStr("")
+    llm_encryption_key_file: str = ""
+    llm_allowed_origins: str = "https://maas-api.cmhk.com"
+    llm_private_origins: str = ""
+    llm_allow_local_http_credentials: bool = False
     allowed_origins: str = "http://127.0.0.1:5173,http://127.0.0.1:5174,http://localhost:5173,http://127.0.0.1:8000,http://127.0.0.1:8001,http://127.0.0.1:8011"
 
 

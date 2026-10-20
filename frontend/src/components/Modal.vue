@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 defineProps<{
   title: string;
+  subtitle?: string;
   wide?: boolean;
   drawer?: boolean;
   busy?: boolean;
@@ -19,7 +20,11 @@ onMounted(() => dialog.value?.showModal());
     @cancel.prevent="!busy && emit('close')"
   >
     <div class="modal-head">
-      <h2 id="modal-title">{{ title }}</h2>
+      <div v-if="subtitle">
+        <h2 id="modal-title">{{ title }}</h2>
+        <p class="modal-subtitle">{{ subtitle }}</p>
+      </div>
+      <h2 v-else id="modal-title">{{ title }}</h2>
       <button
         type="button"
         class="icon-button"

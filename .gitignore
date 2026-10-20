@@ -13,3 +13,6 @@ dist/
 playwright-report/
 test-results/
 .DS_Store
+
+.local-secrets/
+test-results-llm/

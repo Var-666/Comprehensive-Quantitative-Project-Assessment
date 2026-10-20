@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import auth, auth_routes, evaluation_routes, imports, workflow_routes
+from . import auth, auth_routes, evaluation_routes, imports, llm_routes, workflow_routes
 from . import services as svc
 from .config import PENDING_RULES, settings
 from .db import get_db
@@ -60,7 +60,7 @@ async def lifespan(_):
 
 app = FastAPI(
     title="项目总体量化评估智能体",
-    version="0.3.0",
+    version="0.4.0",
     lifespan=lifespan,
     dependencies=[Depends(auth.authorize)],
 )
@@ -179,6 +179,7 @@ Db = Annotated[Session, Depends(get_db)]
 auth_routes.register(app, Db, ok)
 workflow_routes.register(app, Db, ok)
 evaluation_routes.register(app, Db, ok)
+llm_routes.register(app, Db, ok)
 
 
 @app.get("/api/v1/health")

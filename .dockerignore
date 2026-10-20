@@ -10,3 +10,6 @@
 *.db-*
 frontend/test-results
 frontend/playwright-report
+
+.local-secrets/
+frontend/test-results-llm
