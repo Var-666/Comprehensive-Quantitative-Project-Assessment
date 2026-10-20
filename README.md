@@ -1,6 +1,6 @@
-# 项目总体量化评估智能体 · V0.2.0
+# 项目总体量化评估智能体 · V0.3.0
 
-第一、二阶段版本：Vue 3 / TypeScript / Vite / Pinia / Vue Router + FastAPI / SQLAlchemy / Alembic。页面连接真实 API 与数据库，所有业务接口强制登录、项目授权与服务端权限校验。计划编制人与批准人、实际提交人与核实人必须分离。验收基线已由用户于2026-10-20确认，见 [第一阶段基线](docs/PHASE1_BASELINE.md) 与 [逐项验收表](docs/PHASE1_ACCEPTANCE.md)。
+第一、二、三阶段版本：Vue 3 / TypeScript / Vite / Pinia / Vue Router + FastAPI / SQLAlchemy / Alembic。页面连接真实 API 与数据库，所有业务接口强制登录、项目授权与服务端权限校验。计划编制人与批准人、实际提交人与核实人必须分离。验收基线已由用户于2026-10-20确认，见 [第一阶段基线](docs/PHASE1_BASELINE.md) 与 [逐项验收表](docs/PHASE1_ACCEPTANCE.md)。
 
 ## 本地启动
 
@@ -162,7 +162,7 @@ npm run test:e2e
 
 生产配置须 `APP_ENV=production`、`DEMO_MODE=false`、PostgreSQL及 `COOKIE_SECURE=true`，并设置真实HTTPS域名的 `ALLOWED_ORIGINS`；企业SSO/组织同步和证据存储是后续集成，不以样本账号代替企业实际人员。
 
-测试意图涵盖：防止并发覆盖、保存历史计划、禁止跨项目版本、实际提交不代表核实、导入预览不写业务表、整批原子性、重复提交防重、预览后冲突二次检查、异常文件/公式输入拒绝，以及对照全部 67 个样本节点日期和核实事实。第二阶段另有确定性提醒、工作日历、版本失效、审发分离、任务与反馈测试；第三阶段指标及AI用例未实现，不声称通过。
+测试意图涵盖：防止并发覆盖、保存历史计划、禁止跨项目版本、实际提交不代表核实、导入预览不写业务表、整批原子性、重复提交防重、预览后冲突二次检查、异常文件/公式输入拒绝，以及对照全部 67 个样本节点日期和核实事实。第二阶段另有确定性提醒、工作日历、版本失效、审发分离、任务与反馈测试；第三阶段增加Excel试算核对、冻结证据、独立报告审核、金额授权/核实、模型合约与输出拒绝测试。
 
 第二阶段执行记录、限制及缺失依据见 [第二阶段验收](docs/PHASE2_ACCEPTANCE.md)；第一阶段历史交付见 [docs/DELIVERY.md](docs/DELIVERY.md)。
 
@@ -178,3 +178,36 @@ frontend/tests/         浏览器端到端测试
 scripts/               安装、迁移、开发启动、样本初始化与检查
 docs/                  依据、取舍与实际验收记录
 ```
+
+
+## 第三阶段操作
+
+规则见 [第三阶段基线](docs/PHASE3_BASELINE.md)，实际验证记录见 [第三阶段验收](docs/PHASE3_ACCEPTANCE.md)。升级已有数据库先在 backend 运行 `../.venv/bin/alembic upgrade head`，开发启动方式不变。
+
+1. “量化评估”选择业务截止日并计算；原始样本选择2026-10-19。项目明细可按类别筛选、查看节点来源/核实记录、保存及读取历史快照。试算按期率与核实覆盖率分别展示，空分母显示“—”。CSV导出来自当前权限范围的后端计算。
+2. “AI 智能分析”选项目、截止日和报告类型，生成冻结事实报告草稿，提交审核，再换另一审核账号批准/退回。可查看事实引用及审核记录，导出HTML（保留Mock/审核状态，浏览器可打印）。无生效计划不能生成报告。
+3. “收付款记录”页签由管理员给已有成员额外授权，编辑分别录入计划和实际；获额外核实权的另一项目审核人核实实际凭证。未核实实际不加入确认金额。含金额报告需勾选且有财务读取权；财务读取撤销后报告访问、导出也拒绝。
+4. “提醒与待办”草稿支持AI整理，原事实快照不变，仍需独立审核和单独站内发送。
+
+可选加载Excel06虚构财务数据（不自动授权任何人）：
+
+```bash
+cd backend
+../.venv/bin/python -m app.phase3_seed --currency CNY
+# 容器环境：docker compose exec backend python -m app.phase3_seed --currency CNY
+```
+
+币种是命令调用者明确提供的演示假设，原表没有单独币种字段。仅development/test + DEMO_MODE=true可执行，6条计划和1条有发生事实的实际记录；重复不覆盖。
+
+默认 `AI_PROVIDER=mock` 不调用模型。真实模式配置 `.env` 中 `AI_PROVIDER=openai_compatible`、`AI_BASE_URL`（HTTPS，包含例如/v1前缀）、`AI_MODEL`、`AI_API_KEY`，开启 `AI_EXTERNAL_ENABLED=true` 并重启服务；页面还须本次显式同意。端点须支持 `/chat/completions` 严格JSON Schema，具体模型由部署方选择。仅外送事实ID/类别/类型，正文留在本系统；模型不能自由改写事实或补充数字。网络/格式错误会明确失败，不冒充Mock成功。密钥不返回前端，不写日志或Git。未配置真实模型时，测试仅覆盖Mock及HTTP传输合约替身。
+
+| 新增功能 | `/api/v1` 路径 |
+|---|---|
+| 试算与导出 | `GET /metrics/summary?as_of=`、`GET /metrics/export?as_of=` |
+| 项目评价/证据 | `GET /projects/{id}/metrics`、`/metric-evidence`（as_of、计划版本/快照、类别、分页） |
+| 冻结快照 | `GET/POST /projects/{id}/metric-snapshots`、`GET /metric-snapshots/{id}` |
+| 财务权限/事实 | `GET/PUT /projects/{id}/financial-access`、`GET /projects/{id}/financial-records?as_of=`、`POST /projects/{id}/financial-plans`、`/financial-actuals`、`POST /financial-actuals/{id}/verify` |
+| 报告 | `POST /projects/{id}/reports/draft`（Idempotency-Key）、`GET /projects/{id}/reports`、`GET /reports/{id}`、`POST /reports/{id}/submit-review`、`/review`、`GET /reports/{id}/export` |
+| 模型配置/通知整理 | `GET /ai/config`（无密钥）、`POST /notifications/{id}/ai-draft` |
+
+报告提交/审核、财务核实和通知整理要求 If-Match。报告与通知模型整理最多持有一次请求的项目事务锁和配置超时（默认20秒），以避免审核/授权撤销和生成之间竞态；无后台自动外送或自动重试。当前报表按计算时已核实事实复算截止日，不提供历史知情时间重放或完整会计台账。

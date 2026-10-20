@@ -6,7 +6,8 @@ import ProjectsView from "./views/ProjectsView.vue";
 import ProjectDetail from "./views/ProjectDetail.vue";
 import MilestonesView from "./views/MilestonesView.vue";
 import OverviewView from "./views/OverviewView.vue";
-import PendingView from "./views/PendingView.vue";
+import MetricsView from "./views/MetricsView.vue";
+import AnalysisView from "./views/AnalysisView.vue";
 import ActionsView from "./views/ActionsView.vue";
 import WorkflowsView from "./views/WorkflowsView.vue";
 import "./style.css";
@@ -28,14 +29,12 @@ const router = createRouter({
     },
     { path: "/actions", component: ActionsView, meta: { title: "标准动作" } },
     { path: "/tasks", component: WorkflowsView, meta: { title: "提醒与待办" } },
-    ...[
-      ["metrics", "量化评估"],
-      ["analysis", "AI 智能分析"],
-    ].map(([path, title]) => ({
-      path: `/${path}`,
-      component: PendingView,
-      meta: { title },
-    })),
+    { path: "/metrics", component: MetricsView, meta: { title: "量化评估" } },
+    {
+      path: "/analysis",
+      component: AnalysisView,
+      meta: { title: "AI 智能分析" },
+    },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],
 });

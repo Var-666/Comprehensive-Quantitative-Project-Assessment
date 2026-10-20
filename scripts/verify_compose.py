@@ -116,6 +116,14 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
         )
         if not all(value > 0 for value in workflow_before.values()):
             raise RuntimeError("第二阶段浏览器闭环未产生完整业务记录")
+        evaluation_count_command = count_command[:-1] + [
+            "SELECT json_build_object('snapshots',(SELECT count(*) FROM metric_snapshots),'reports',(SELECT count(*) FROM report_drafts),'report_reviews',(SELECT count(*) FROM report_reviews),'financial_plans',(SELECT count(*) FROM financial_plans),'financial_actuals',(SELECT count(*) FROM financial_actuals),'financial_access',(SELECT count(*) FROM financial_access))"
+        ]
+        evaluation_before = json.loads(
+            run(evaluation_count_command, capture_output=True).stdout
+        )
+        if not all(value > 0 for value in evaluation_before.values()):
+            raise RuntimeError("第三阶段浏览器验收未产生完整业务记录")
         worker_log = run(
             compose + ["logs", "--no-color", "worker"], capture_output=True
         ).stdout
@@ -136,6 +144,11 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
         workflow_after = json.loads(
             run(workflow_count_command, capture_output=True).stdout
         )
+        evaluation_after = json.loads(
+            run(evaluation_count_command, capture_output=True).stdout
+        )
+        if evaluation_before != evaluation_after:
+            raise RuntimeError("第三阶段快照、报告、财务事实或授权在重启后丢失")
         if workflow_before != workflow_after:
             raise RuntimeError("数据库重启后提醒、通知、任务、反馈或站内消息丢失")
         if before != after or int(after) < 3:
@@ -152,6 +165,7 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
                     "project_count_after_restart": int(after),
                     "worker_scan": "passed",
                     "workflow_records_after_restart": workflow_after,
+                    "evaluation_records_after_restart": evaluation_after,
                 },
                 ensure_ascii=False,
                 indent=2,

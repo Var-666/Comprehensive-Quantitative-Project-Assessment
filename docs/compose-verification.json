@@ -10,5 +10,13 @@
     "tasks": 1,
     "feedback": 1,
     "inbox": 1
+  },
+  "evaluation_records_after_restart": {
+    "snapshots": 1,
+    "reports": 1,
+    "report_reviews": 1,
+    "financial_plans": 1,
+    "financial_actuals": 1,
+    "financial_access": 2
   }
 }

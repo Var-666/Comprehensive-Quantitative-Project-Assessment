@@ -91,7 +91,7 @@ def authorize(request: Request, token=Depends(cookie), db=Depends(get_db)):
     action = "read" if request.method in ("GET", "HEAD") else "write"
     if path.endswith(("/activate", "/verify")):
         action = "review"
-    if "/members" in path:
+    if "/members" in path or "/financial-access" in path:
         action = "manage" if request.method != "GET" else "read"
     params = request.path_params
     project_id = params.get("project_id")

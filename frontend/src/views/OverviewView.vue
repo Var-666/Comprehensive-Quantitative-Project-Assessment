@@ -50,13 +50,14 @@ onMounted(load);
         <span>已录入节点</span><strong>{{ summary.milestones }}</strong>
       </div>
       <div class="card stat">
-        <span>当前阶段</span><strong class="phase-number">基础数据管理</strong>
+        <span>当前阶段</span
+        ><strong class="phase-number">第一期业务闭环</strong>
       </div>
     </div>
     <section class="card table-card">
       <div class="section-title">
         <h3>重点项目进展</h3>
-        <span class="muted">查询当前数据库 · 不展示未实现的提醒及评价指标</span>
+        <span class="muted">查询当前数据库 · 评价与报告见对应模块</span>
       </div>
       <div v-if="projects.length" class="table-wrap">
         <table>
@@ -87,8 +88,8 @@ onMounted(load);
       <p v-else class="empty">尚无项目，请先新建或初始化模拟测试数据。</p>
     </section>
     <p class="notice">
-      第一阶段已开放项目、节点计划与 Excel 导入。标准动作、自动提醒、量化评估和
-      AI 分析将在后续阶段实现。
+      项目、节点、导入、标准动作、提醒待办、试算评价与阶段报告已接入数据库。 AI
+      默认 Mock，实际事实与报告仍须独立核实、审核。
     </p>
   </template>
 </template>

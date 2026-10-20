@@ -71,6 +71,8 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await page.getByRole('button',{name:'确认生成草稿与待办'}).click();
  await expect(page.getByText('本次生成0条，未自动审核或发送。')).toBeVisible();
  await page.getByRole('button',{name:'通知队列',exact:true}).click();
+ await page.getByRole('button',{name:'AI 整理通知草稿',exact:true}).click();
+ await expect(page.getByLabel('通知正文')).toHaveValue(/Mock/);
  await page.getByLabel('通知正文').fill('根据已保存计划及批准动作整理资料；仅用于测试。');
  await page.getByRole('button',{name:'保存通知草稿'}).click();
  await page.getByRole('button',{name:'提交通知审核'}).click();

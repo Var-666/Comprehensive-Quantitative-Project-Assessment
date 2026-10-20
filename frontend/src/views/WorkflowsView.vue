@@ -36,6 +36,29 @@ const auth = useAuth(),
   reviewAction = ref(""),
   reviewComment = ref(""),
   confirmed = ref(false);
+const aiConfig = ref<{ provider: string; mode_label: string }>(),
+  aiConsent = ref(false);
+async function arrangeDraft() {
+  if (!selected.value) return;
+  busy.value = true;
+  error.value = "";
+  try {
+    const r = await api<{ notice: Notice; generation: { label: string } }>(
+      `/notifications/${selected.value.id}/ai-draft`,
+      {
+        method: "POST",
+        headers: versionHeader(selected.value.row_version),
+        body: json({ allow_external: aiConsent.value }),
+      },
+    );
+    choose(r.notice);
+    success.value = r.generation.label + "；草稿已保存，仍需独立审核。";
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    busy.value = false;
+  }
+}
 const edit = reactive({ title: "", body: "" });
 const today = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Shanghai",
@@ -182,6 +205,7 @@ async function read(m: InboxRecord) {
 onMounted(async () => {
   try {
     await catalog.load();
+    aiConfig.value = await api("/ai/config");
     let n = 1;
     while (true) {
       const p = await api<Page<Project>>(`/projects?page_size=100&page=${n}`);
@@ -337,6 +361,25 @@ onMounted(async () => {
         <p>来源：{{ selected.fact_snapshot_json.source_ref }}</p>
       </div>
       <h3>通知内容（确定性模板草稿） · 第{{ selected.draft_version }}版</h3>
+      <p v-if="editable" class="notice warning">
+        {{ aiConfig?.mode_label }} · AI
+        仅整理已批准来源事实，不能改变提醒日期或核实状态。
+      </p>
+      <label
+        v-if="editable && aiConfig?.provider !== 'mock'"
+        class="inline-label"
+        ><input
+          v-model="aiConsent"
+          type="checkbox"
+        />允许本次外送事实ID与分类（不含正文）</label
+      >
+      <button
+        v-if="editable"
+        :disabled="busy || (!aiConsent && aiConfig?.provider !== 'mock')"
+        @click="arrangeDraft"
+      >
+        AI 整理通知草稿
+      </button>
       <template v-if="editable"
         ><label
           >通知标题<input

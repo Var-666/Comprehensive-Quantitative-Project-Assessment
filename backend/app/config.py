@@ -1,5 +1,7 @@
 from pathlib import Path
+from typing import Literal
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -16,6 +18,12 @@ class Settings(BaseSettings):
     demo_mode: bool = True
     session_hours: int = 8
     cookie_secure: bool = False
+    ai_provider: Literal["mock", "openai_compatible"] = "mock"
+    ai_base_url: str = ""
+    ai_model: str = ""
+    ai_api_key: SecretStr = SecretStr("")
+    ai_external_enabled: bool = False
+    ai_timeout_seconds: float = Field(default=20, ge=1, le=60)
     allowed_origins: str = "http://127.0.0.1:5173,http://127.0.0.1:5174,http://localhost:5173,http://127.0.0.1:8000,http://127.0.0.1:8001,http://127.0.0.1:8011"
 
 
@@ -29,7 +37,7 @@ PENDING_RULES = {
     "D-02": "2026-10-20已确认：项目编号全局唯一，节点编号项目内唯一；不限制未提供的编号格式",
     "D-03": "2026-10-20已确认：按项目授权，计划编制人与批准人分离",
     "D-08": "2026-10-20已确认：Excel遇错整批回滚、重复编号不覆盖",
-    "D-09": "评价口径待确认；第一阶段不出绩效指标",
+    "D-09": "2026-10-20已确认试算O/(O+L)，待核对、已核实逾期未完成单列；不生成综合得分",
     "D-11/D-12": "2026-10-20已确认：admin/editor/reviewer/viewer项目角色；实际提交人与核实人分离",
     "D-15": "证据存储待确认；当前保留来源说明，不冒充正式附件",
 }
