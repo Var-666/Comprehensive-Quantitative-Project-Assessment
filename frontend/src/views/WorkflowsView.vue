@@ -1,0 +1,621 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import { api, errorMessage, json, versionHeader } from "../api";
+import { useAuth, useCatalog } from "../store";
+import type { Page, Project } from "../types";
+import type {
+  InboxRecord,
+  Notice,
+  ScanRow,
+  TaskRecord,
+} from "../workflowTypes";
+import { label } from "../workflowTypes";
+import Modal from "../components/Modal.vue";
+import Icon from "../components/Icon.vue";
+import TaskDrawer from "../components/TaskDrawer.vue";
+const auth = useAuth(),
+  catalog = useCatalog(),
+  tab = ref("notices"),
+  busy = ref(false),
+  error = ref(""),
+  success = ref(""),
+  projectId = ref(""),
+  status = ref(""),
+  mine = ref(false),
+  projects = ref<Project[]>([]),
+  notices = ref<Page<Notice>>({ items: [], total: 0, page: 1, page_size: 20 }),
+  tasks = ref<Page<TaskRecord>>({
+    items: [],
+    total: 0,
+    page: 1,
+    page_size: 20,
+  }),
+  inbox = ref<InboxRecord[]>([]),
+  selected = ref<Notice>(),
+  showTask = ref<TaskRecord>(),
+  reviewAction = ref(""),
+  reviewComment = ref(""),
+  confirmed = ref(false);
+const edit = reactive({ title: "", body: "" });
+const today = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).format(new Date());
+const scan = reactive({
+  as_of: today,
+  result: [] as ScanRow[],
+  generated: null as number | null,
+  previewed: false,
+  project: "",
+});
+const canWrite = computed(
+  () => !!selected.value && auth.can(selected.value.project_id),
+);
+const canReview = computed(
+  () =>
+    !!selected.value &&
+    auth.can(selected.value.project_id, "review") &&
+    !selected.value.editor_ids.includes(auth.user?.user_id || ""),
+);
+const editable = computed(
+  () =>
+    selected.value &&
+    ["draft", "returned"].includes(selected.value.status) &&
+    canWrite.value,
+);
+function choose(n?: Notice) {
+  selected.value = n;
+  edit.title = n?.title || "";
+  edit.body = n?.body || "";
+}
+async function load(page = 1) {
+  busy.value = true;
+  error.value = "";
+  try {
+    const q = new URLSearchParams({
+      project_id: projectId.value,
+      status: status.value,
+      page: String(page),
+      page_size: "20",
+    });
+    if (tab.value === "notices") {
+      notices.value = await api<Page<Notice>>(`/notifications?${q}`);
+      choose(
+        notices.value.items.find((n) => n.id === selected.value?.id) ||
+          (notices.value.items[0] as Notice),
+      );
+    } else if (tab.value === "tasks") {
+      tasks.value = await api<Page<TaskRecord>>(
+        `/tasks?${q}&mine=${mine.value}`,
+      );
+    } else if (tab.value === "inbox")
+      inbox.value = await api<InboxRecord[]>("/inbox");
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    busy.value = false;
+  }
+}
+async function switchTab(value: string) {
+  tab.value = value;
+  status.value = "";
+  success.value = "";
+  await load();
+}
+async function mutate(
+  path: string,
+  body?: unknown,
+  method = "POST",
+  message = "操作已保存",
+) {
+  if (!selected.value) return;
+  busy.value = true;
+  error.value = "";
+  try {
+    const result = await api<Notice>(
+      `/notifications/${selected.value.id}/${path}`,
+      {
+        method,
+        headers: versionHeader(selected.value.row_version),
+        ...(body === undefined ? {} : { body: json(body) }),
+      },
+    );
+    choose(result);
+    reviewAction.value = "";
+    success.value = message;
+    await load(notices.value.page);
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    busy.value = false;
+  }
+}
+function openReview(action: string) {
+  reviewAction.value = action;
+  reviewComment.value = "";
+  confirmed.value = false;
+}
+async function review() {
+  await mutate(
+    "review",
+    {
+      draft_version: selected.value!.draft_version,
+      decision: reviewAction.value,
+      comment: reviewComment.value,
+    },
+    "POST",
+    "审核结果已保存；审核通过仍处于待发送状态",
+  );
+}
+async function run(generate = false) {
+  busy.value = true;
+  error.value = "";
+  try {
+    const r = await api<{ items: ScanRow[]; generated: number }>(
+      `/reminder-jobs/${generate ? "run" : "simulate"}`,
+      {
+        method: "POST",
+        body: json({ as_of: scan.as_of, project_ids: [scan.project] }),
+      },
+    );
+    scan.result = r.items;
+    scan.generated = generate ? r.generated : null;
+    scan.previewed = true;
+    if (generate)
+      success.value = `生成${r.generated}条提醒草稿；重复项已跳过。任务尚待人工分派。`;
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    busy.value = false;
+  }
+}
+async function read(m: InboxRecord) {
+  try {
+    await api(`/inbox/${m.id}/read`, { method: "POST" });
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  }
+}
+onMounted(async () => {
+  try {
+    await catalog.load();
+    let n = 1;
+    while (true) {
+      const p = await api<Page<Project>>(`/projects?page_size=100&page=${n}`);
+      projects.value.push(...p.items);
+      if (projects.value.length >= p.total) break;
+      n++;
+    }
+    scan.project = projects.value[0]?.id || "";
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  }
+});
+</script>
+<template>
+  <div class="page-title">
+    <div>
+      <h1>提醒与待办</h1>
+      <p>按照计划日期与标准动作生成待办，重要通知先审核再发布</p>
+    </div>
+    <button class="primary" @click="switchTab('scan')">
+      <Icon name="imgVectorPlus" />手动创建提醒
+    </button>
+  </div>
+  <div class="tabs">
+    <button
+      :class="{ primary: tab === 'notices' }"
+      @click="switchTab('notices')"
+    >
+      通知队列</button
+    ><button :class="{ primary: tab === 'tasks' }" @click="switchTab('tasks')">
+      执行任务</button
+    ><button :class="{ primary: tab === 'inbox' }" @click="switchTab('inbox')">
+      站内收件箱</button
+    ><button :class="{ primary: tab === 'scan' }" @click="switchTab('scan')">
+      提醒扫描
+    </button>
+  </div>
+  <p v-if="error" class="error" role="alert">
+    {{ error }} <button @click="load()">重试</button>
+  </p>
+  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <form
+    v-if="['notices', 'tasks'].includes(tab)"
+    class="card filters"
+    @submit.prevent="load()"
+  >
+    <label
+      >筛选项目<select v-model="projectId">
+        <option value="">全部授权项目</option>
+        <option v-for="p in projects" :key="p.id" :value="p.id">
+          {{ p.project_code }} · {{ p.project_name }}
+        </option>
+      </select></label
+    ><label
+      >工作状态<select v-model="status">
+        <option value="">全部</option>
+        <option
+          v-for="s in tab === 'notices'
+            ? [
+                'draft',
+                'pending_review',
+                'returned',
+                'approved_pending_send',
+                'sent',
+                'invalidated',
+              ]
+            : [
+                'unassigned',
+                'todo',
+                'in_progress',
+                'submitted',
+                'returned',
+                'verified_done',
+                'cancelled',
+              ]"
+          :key="s"
+          :value="s"
+        >
+          {{ label(s) }}
+        </option>
+      </select></label
+    ><label v-if="tab === 'tasks'" class="checkbox-line"
+      ><input v-model="mine" type="checkbox" />仅看分派给我</label
+    ><button :disabled="busy">查询工作</button>
+  </form>
+  <p v-if="busy" class="muted" role="status">正在处理…</p>
+  <div v-if="tab === 'notices'" class="workflow-split notice-split">
+    <section class="card queue">
+      <h3>
+        待办通知队列 <span class="badge">共{{ notices.total }}条</span>
+      </h3>
+      <p v-if="!notices.items.length && !busy" class="empty">
+        暂无通知。可先配置标准动作和规则，再预览提醒扫描。
+      </p>
+      <button
+        v-for="n in notices.items"
+        :key="n.id"
+        class="queue-item"
+        :class="{ selected: selected?.id === n.id }"
+        @click="choose(n)"
+      >
+        <strong>{{ n.title }}</strong
+        ><span class="badge">{{ label(n.status) }}</span
+        ><small
+          >{{ n.fact_snapshot_json.planned_date }} · 提前{{
+            n.fact_snapshot_json.days_before
+          }}个{{ label(n.fact_snapshot_json.day_basis) }}</small
+        >
+      </button>
+      <div class="pagination">
+        <button
+          :disabled="busy || notices.page <= 1"
+          @click="load(notices.page - 1)"
+        >
+          上一页</button
+        ><span>{{ notices.page }}</span
+        ><button
+          :disabled="busy || notices.page * 20 >= notices.total"
+          @click="load(notices.page + 1)"
+        >
+          下一页
+        </button>
+      </div>
+    </section>
+    <section v-if="selected" class="card workflow-detail">
+      <div class="section-title">
+        <h2>
+          <Icon name="imgVectorBell" />{{
+            selected.fact_snapshot_json.milestone_name
+          }}准备提醒
+        </h2>
+        <span class="badge" :class="selected.status">{{
+          label(selected.status)
+        }}</span>
+      </div>
+      <div class="fact-box">
+        <strong
+          >项目：{{ selected.fact_snapshot_json.project_code }}
+          {{ selected.fact_snapshot_json.project_name }}</strong
+        >
+        <p>
+          计划节点：{{ selected.fact_snapshot_json.planned_date }} |
+          提醒触发：{{ selected.fact_snapshot_json.trigger_date }}
+        </p>
+        <p>
+          接收人：{{ selected.fact_snapshot_json.recipient_name }} | 依据：{{
+            selected.fact_snapshot_json.plan_version
+          }}
+          · {{ selected.fact_snapshot_json.rule_code }}
+          {{ selected.fact_snapshot_json.rule_version }}
+        </p>
+        <p>来源：{{ selected.fact_snapshot_json.source_ref }}</p>
+      </div>
+      <h3>通知内容（确定性模板草稿） · 第{{ selected.draft_version }}版</h3>
+      <template v-if="editable"
+        ><label
+          >通知标题<input
+            v-model="edit.title"
+            required
+            maxlength="200" /></label
+        ><label
+          >通知正文<textarea
+            v-model="edit.body"
+            rows="10"
+            required
+            maxlength="12000"
+          />
+        </label>
+        <div class="actions">
+          <button
+            :disabled="busy || !edit.title.trim() || !edit.body.trim()"
+            @click="
+              mutate('draft', edit, 'PATCH', '草稿修订已保存，需重新审核')
+            "
+          >
+            <Icon name="imgVectorSave" />保存通知草稿</button
+          ><button
+            class="primary"
+            :disabled="
+              busy ||
+              edit.title !== selected.title ||
+              edit.body !== selected.body
+            "
+            @click="
+              mutate('submit-review', undefined, 'POST', '通知已提交独立审核')
+            "
+          >
+            提交通知审核
+          </button>
+        </div>
+        <p
+          v-if="edit.title !== selected.title || edit.body !== selected.body"
+          class="muted"
+        >
+          请先保存修改，再提交审核。
+        </p></template
+      >
+      <div v-else class="notification-body">
+        <strong>{{ selected.title }}</strong>
+        <p class="pre-wrap">{{ selected.body }}</p>
+      </div>
+      <div class="actions">
+        <template v-if="selected.status === 'pending_review'"
+          ><button
+            :disabled="busy || !canReview"
+            @click="openReview('returned')"
+          >
+            <Icon name="imgVectorUndo2" />退回修改</button
+          ><button
+            class="primary"
+            :disabled="busy || !canReview"
+            @click="openReview('approved')"
+          >
+            <Icon name="imgVectorCheck" />审核通过
+          </button></template
+        ><button
+          v-if="selected.status === 'approved_pending_send'"
+          class="primary"
+          :disabled="busy || !canWrite"
+          @click="
+            mutate(
+              'dispatch',
+              { channel: 'in_app' },
+              'POST',
+              '站内消息已发布，投递记录已保存',
+            )
+          "
+        >
+          发布站内通知</button
+        ><RouterLink
+          class="button"
+          :to="`/milestones?project=${selected.project_id}`"
+          ><Icon name="imgVectorFileText" />查看节点依据</RouterLink
+        >
+      </div>
+      <p class="muted">
+        审核通过仅表示内容审批。站内发布需单独操作；外部邮件、短信和企业消息渠道未启用。计划变更会作废未发送旧稿，已发布历史保留。
+      </p>
+      <details>
+        <summary>生成与审核记录</summary>
+        <p>生成方式：确定性模板，不是AI输出</p>
+        <p v-for="(r, i) in selected.reviews" :key="i">
+          第{{ r.draft_version }}版 · {{ label(r.decision) }} ·
+          {{ r.comment }} · {{ r.reviewed_at }}
+        </p>
+        <p v-for="(d, i) in selected.deliveries" :key="i">
+          站内投递：{{ d.attempt_state }} · {{ d.finished_at }}
+        </p>
+      </details>
+    </section>
+    <section v-else class="card empty">请选择一条通知查看依据与草稿。</section>
+  </div>
+  <section v-if="tab === 'tasks'" class="card table-card">
+    <div class="section-title">
+      <h3>标准动作执行任务</h3>
+      <span class="muted">共{{ tasks.total }}项 · 任务完成不自动完成节点</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>任务</th>
+            <th>执行人</th>
+            <th>截止日期</th>
+            <th>执行状态</th>
+            <th>来源复核</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="t in tasks.items" :key="t.id">
+            <td>{{ t.title }}</td>
+            <td>
+              {{
+                catalog.users.find((u) => u.id === t.assignee_id)
+                  ?.display_name || "未分派"
+              }}
+            </td>
+            <td>{{ t.due_date }}</td>
+            <td>
+              <span class="badge" :class="t.status">{{ label(t.status) }}</span>
+            </td>
+            <td>{{ t.requires_review ? t.review_reason : "—" }}</td>
+            <td><button @click="showTask = t">处理任务</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p v-if="!tasks.items.length && !busy" class="empty">
+      暂无符合条件的任务。
+    </p>
+    <div class="pagination">
+      <button :disabled="busy || tasks.page <= 1" @click="load(tasks.page - 1)">
+        上一页</button
+      ><span>第{{ tasks.page }}页</span
+      ><button
+        :disabled="busy || tasks.page * 20 >= tasks.total"
+        @click="load(tasks.page + 1)"
+      >
+        下一页
+      </button>
+    </div>
+  </section>
+  <section v-if="tab === 'inbox'" class="card workflow-detail">
+    <h3>我的站内消息</h3>
+    <p v-if="!inbox.length && !busy" class="empty">
+      暂无已发布给您的消息。审核通过的待发送草稿不会出现在这里。
+    </p>
+    <section v-for="m in inbox" :key="m.id" class="form-section">
+      <div class="section-title">
+        <h3>{{ m.title }}</h3>
+        <button v-if="!m.read_at" @click="read(m)">标记已读</button
+        ><span v-else class="muted">已读</span>
+      </div>
+      <p class="pre-wrap">{{ m.body }}</p>
+      <small>{{ m.created_at }}</small>
+    </section>
+  </section>
+  <section v-if="tab === 'scan'" class="card workflow-detail">
+    <h3>提醒扫描预览与生成</h3>
+    <p class="notice">
+      先预览确定性计算结果，再显式生成草稿与待办。自动扫描进程使用当前业务日期；此处开发/测试环境可选模拟日期，正式环境只能生成当天结果。
+    </p>
+    <form class="form-grid" @submit.prevent="run(false)">
+      <label
+        >扫描项目 *<select
+          v-model="scan.project"
+          required
+          @change="scan.previewed = false"
+        >
+          <option value="">请选择项目</option>
+          <option v-for="p in projects" :key="p.id" :value="p.id">
+            {{ p.project_code }} · {{ p.project_name }}
+          </option>
+        </select></label
+      ><label
+        >统计 / 扫描日期 *<input
+          v-model="scan.as_of"
+          type="date"
+          required
+          @change="scan.previewed = false"
+      /></label>
+      <div class="actions">
+        <button :disabled="busy">预览提醒计算</button
+        ><button
+          type="button"
+          class="primary"
+          :disabled="busy || !scan.previewed || !auth.user?.is_system_admin"
+          @click="run(true)"
+        >
+          确认生成草稿与待办
+        </button>
+      </div>
+    </form>
+    <p v-if="scan.generated !== null" class="success" role="status">
+      本次生成{{ scan.generated }}条，未自动审核或发送。
+    </p>
+    <div v-if="scan.previewed" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>节点</th>
+            <th>计划日期</th>
+            <th>触发日期</th>
+            <th>判断结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in scan.result" :key="i">
+            <td>{{ r.milestone_code }} {{ r.milestone_name }}</td>
+            <td>{{ r.planned_date || "—" }}</td>
+            <td>{{ r.trigger_date || "—" }}</td>
+            <td>
+              {{
+                r.eligible ? "可生成" : label(r.skipped_reason || "不可生成")
+              }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <TaskDrawer
+    v-if="showTask"
+    :task="showTask"
+    @close="showTask = undefined"
+    @changed="load(tasks.page)"
+  />
+  <Modal
+    v-if="reviewAction && selected"
+    title="通知审核确认"
+    :busy="busy"
+    @close="reviewAction = ''"
+  >
+    <section class="form-section">
+      <h3>{{ selected.title }}</h3>
+      <p>
+        计划{{ selected.fact_snapshot_json.planned_date }} · 接收人{{
+          selected.fact_snapshot_json.recipient_name
+        }}
+        · 内容第{{ selected.draft_version }}版
+      </p>
+    </section>
+    <p class="notice">
+      审核通过仅代表通知内容经过审批。不代表消息已发送、被接收或节点完成。
+    </p>
+    <form id="notice-review" @submit.prevent="review">
+      <label class="checkbox-line"
+        ><input
+          v-model="confirmed"
+          type="checkbox"
+          required
+        />已核对项目节点、通知内容、接收人与来源</label
+      ><label
+        >审核意见 *<textarea
+          v-model="reviewComment"
+          required
+          maxlength="500"
+          rows="3"
+        />
+      </label>
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
+    </form>
+    <template #footer
+      ><button :disabled="busy" @click="reviewAction = ''">返回修改</button
+      ><button
+        class="primary"
+        form="notice-review"
+        type="submit"
+        :disabled="busy || !confirmed"
+      >
+        {{ reviewAction === "approved" ? "确认审核通过" : "确认退回修改" }}
+      </button></template
+    >
+  </Modal>
+</template>

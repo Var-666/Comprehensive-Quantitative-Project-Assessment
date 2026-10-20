@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import auth, auth_routes, imports
+from . import auth, auth_routes, imports, workflow_routes
 from . import services as svc
 from .config import PENDING_RULES, settings
 from .db import get_db
@@ -59,8 +59,8 @@ async def lifespan(_):
 
 
 app = FastAPI(
-    title="项目总体量化评估智能体 · 第一阶段",
-    version="0.1.1",
+    title="项目总体量化评估智能体",
+    version="0.2.0",
     lifespan=lifespan,
     dependencies=[Depends(auth.authorize)],
 )
@@ -177,6 +177,7 @@ def ok(request, data):
 
 Db = Annotated[Session, Depends(get_db)]
 auth_routes.register(app, Db, ok)
+workflow_routes.register(app, Db, ok)
 
 
 @app.get("/api/v1/health")
@@ -314,6 +315,9 @@ def archive_project(request: Request, project_id: str, db: Db, if_match: str = H
     svc.match(obj, if_match)
     before = svc.record(obj)
     obj.project_status = "archived"
+    from .workflow import invalidate_plan
+
+    invalidate_plan(db, obj.id, "项目归档", request.state.request_id)
     obj.row_version += 1
     svc.audit(db, obj, "archive", request.state.request_id, before)
     db.commit()
@@ -459,6 +463,8 @@ def actual(request: Request, milestone_id: str, data: ActualInput, db: Db):
 @app.post("/api/v1/milestone-actuals/{actual_id}/verify")
 def verify_actual(request: Request, actual_id: str, data: VerifyInput, db: Db):
     obj = svc.get(db, ActualRecord, actual_id)
+    node = svc.get(db, Milestone, obj.milestone_id)
+    svc.get(db, Project, node.project_id, True)
     node = svc.get(db, Milestone, obj.milestone_id, True)
     db.refresh(obj)
     if obj.submitted_by == request.state.principal.user_id:
@@ -477,6 +483,17 @@ def verify_actual(request: Request, actual_id: str, data: VerifyInput, db: Db):
             svc.audit(db, old, "supersede_fact", request.state.request_id, old_before)
         db.flush()
         obj.is_current = True
+        if obj.completion_flag:
+            from .workflow import invalidate
+            from .workflow_models import Reminder
+
+            item_ids = select(PlanItem.id).where(PlanItem.milestone_id == node.id)
+            invalidate(
+                db,
+                select(Reminder).where(Reminder.milestone_plan_item_id.in_(item_ids)),
+                "节点已核实完成",
+                request.state.request_id,
+            )
     obj.verification_status = data.decision
     obj.verified_at = now()
     obj.verified_by = request.state.principal.user_id

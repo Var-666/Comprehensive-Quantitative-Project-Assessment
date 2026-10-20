@@ -58,6 +58,7 @@ export interface Milestone {
   milestone_name: string;
   node_type_code: string;
   row_version: number;
+  lifecycle_status: string;
   department_name: string | null;
   plan_item: PlanItem;
   actual_records: Actual[];

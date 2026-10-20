@@ -1,4 +1,4 @@
-"""Run the real three-container stack and browser acceptance, then remove only its own resources."""
+"""Run PostgreSQL, API, scanner and UI acceptance, then remove only this run's resources."""
 
 import json
 import os
@@ -55,13 +55,17 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
     ]
 
     def run(args, **kwargs):
-        return subprocess.run(args, env=environment, check=True, cwd=ROOT, text=True, **kwargs)
+        return subprocess.run(
+            args, env=environment, check=True, cwd=ROOT, text=True, **kwargs
+        )
 
     try:
         run(compose + ["up", "-d", "--no-build"])
         for _ in range(60):
             try:
-                with urlopen(f"http://127.0.0.1:{ui_port}/api/v1/health", timeout=2) as response:
+                with urlopen(
+                    f"http://127.0.0.1:{ui_port}/api/v1/health", timeout=2
+                ) as response:
                     if response.status == 200:
                         break
             except (URLError, TimeoutError, ConnectionError):
@@ -86,7 +90,10 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
         environment["EXTERNAL_UI_URL"] = f"http://127.0.0.1:{ui_port}"
         print("容器数据库、后端、前端健康；运行真实容器栈浏览器验收", flush=True)
         subprocess.run(
-            ["npm", "run", "test:e2e"], cwd=ROOT / "frontend", env=environment, check=True
+            ["npm", "run", "test:e2e"],
+            cwd=ROOT / "frontend",
+            env=environment,
+            check=True,
         )
         count_command = compose + [
             "exec",
@@ -101,6 +108,19 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
             "SELECT count(*) FROM projects",
         ]
         before = run(count_command, capture_output=True).stdout.strip()
+        workflow_count_command = count_command[:-1] + [
+            "SELECT json_build_object('reminders',(SELECT count(*) FROM reminder_instances),'notifications',(SELECT count(*) FROM notification_drafts),'tasks',(SELECT count(*) FROM tasks),'feedback',(SELECT count(*) FROM task_feedback),'inbox',(SELECT count(*) FROM inbox_messages))"
+        ]
+        workflow_before = json.loads(
+            run(workflow_count_command, capture_output=True).stdout
+        )
+        if not all(value > 0 for value in workflow_before.values()):
+            raise RuntimeError("第二阶段浏览器闭环未产生完整业务记录")
+        worker_log = run(
+            compose + ["logs", "--no-color", "worker"], capture_output=True
+        ).stdout
+        if "scan completed" not in worker_log:
+            raise RuntimeError("自动扫描进程没有成功运行记录")
         run(compose + ["restart", "db"])
         for _ in range(30):
             result = subprocess.run(
@@ -113,6 +133,11 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
                 break
             time.sleep(1)
         after = run(count_command, capture_output=True).stdout.strip()
+        workflow_after = json.loads(
+            run(workflow_count_command, capture_output=True).stdout
+        )
+        if workflow_before != workflow_after:
+            raise RuntimeError("数据库重启后提醒、通知、任务、反馈或站内消息丢失")
         if before != after or int(after) < 3:
             raise RuntimeError("数据库容器重启后项目数据不一致")
         run(compose + ["restart", "backend"])
@@ -125,6 +150,8 @@ with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as override:
                     "browser_tests": "passed",
                     "database_restart_persistence": "passed",
                     "project_count_after_restart": int(after),
+                    "worker_scan": "passed",
+                    "workflow_records_after_restart": workflow_after,
                 },
                 ensure_ascii=False,
                 indent=2,

@@ -815,3 +815,173 @@ details {
 .login-card p:last-child {
   margin: 0;
 }
+
+/* Phase-two workspaces reuse the Figma panel proportions and shared form tokens. */
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.tabs button {
+  min-width: 100px;
+}
+.workflow-split {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+.template-split {
+  grid-template-columns: minmax(240px, 352fr) minmax(0, 778fr);
+}
+.notice-split {
+  grid-template-columns: minmax(260px, 500fr) minmax(0, 632fr);
+}
+.queue {
+  padding: 17px;
+  min-height: 605px;
+}
+.queue-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  background: #f2f5f9;
+  border: 0;
+  border-radius: 0;
+  padding: 14px;
+  margin-bottom: 10px;
+  gap: 7px;
+  white-space: normal;
+}
+.queue-item strong,
+.queue-item small {
+  overflow-wrap: anywhere;
+}
+.queue-item.selected {
+  background: var(--light);
+  color: var(--blue);
+}
+.queue-item small {
+  color: var(--muted);
+}
+.workflow-detail {
+  padding: 22px;
+  min-width: 0;
+  min-height: 605px;
+}
+.workflow-detail h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+}
+.workflow-detail .section-title {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.workflow-detail > label {
+  margin-bottom: 14px;
+}
+.workflow-detail .actions {
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+.action-item {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+  background: #f2f5f9;
+  padding: 12px;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
+}
+.action-item p {
+  margin: 6px 0;
+}
+.action-item > div {
+  min-width: 0;
+}
+.fact-box,
+.notification-body {
+  background: #f2f5f9;
+  padding: 16px;
+  margin-bottom: 18px;
+  overflow-wrap: anywhere;
+}
+.fact-box p {
+  font-size: 12px;
+  margin: 7px 0 0;
+  color: var(--muted);
+}
+.notification-body p {
+  margin: 14px 0 0;
+}
+.pre-wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workflow-config {
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.workflow-config .actions {
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.calendar-days {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow: auto;
+  padding: 12px;
+  background: #f2f5f9;
+  margin-top: 12px;
+}
+.form-grid .full {
+  grid-column: 1/-1;
+}
+@media (max-width: 1150px) {
+  .template-split {
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+  .notice-split {
+    grid-template-columns: 270px minmax(0, 1fr);
+  }
+  .workflow-detail {
+    padding: 17px;
+  }
+}
+@media (max-width: 950px) {
+  .workflow-split {
+    grid-template-columns: 1fr;
+  }
+  .queue {
+    min-height: 0;
+  }
+}
+.badge.pending_review,
+.badge.approved_pending_send {
+  background: #fff5df;
+  color: #c17822;
+}
+.badge.approved,
+.badge.verified_done,
+.badge.sent {
+  background: #e4f5ef;
+  color: #218778;
+}
+.badge.todo,
+.badge.in_progress,
+.badge.unassigned {
+  background: var(--light);
+  color: var(--blue);
+}
+.badge.invalidated,
+.badge.cancelled,
+.badge.retired {
+  background: #f2f5f9;
+  color: var(--muted);
+}

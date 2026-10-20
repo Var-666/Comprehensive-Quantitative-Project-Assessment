@@ -141,6 +141,10 @@ def update_project(db, project_id, data, version, request_id):
     before = record(project)
     for key, value in data.model_dump().items():
         setattr(project, key, value)
+    if project.project_status in ("completed", "archived"):
+        from .workflow import invalidate_plan
+
+        invalidate_plan(db, project.id, "项目关闭", request_id)
     # Even identical saves take a version, to serialize child changes and imports.
     project.row_version += 1
     audit(db, project, "update", request_id, before)
@@ -186,7 +190,26 @@ def create_plan(db, project_id, data, version, request_id):
             for key in ("id", "plan_version_id"):
                 values.pop(key)
             values["planned_date"] = item.planned_date
-            db.add(PlanItem(**values, plan_version_id=plan.id))
+            copied = PlanItem(**values, plan_version_id=plan.id)
+            db.add(copied)
+            db.flush()
+            from .workflow_models import ActionLink
+
+            for link in db.scalars(
+                select(ActionLink).where(
+                    ActionLink.plan_item_id == item.id, ActionLink.status == "active"
+                )
+            ):
+                db.add(
+                    ActionLink(
+                        milestone_id=link.milestone_id,
+                        plan_item_id=copied.id,
+                        template_item_id=link.template_item_id,
+                        assigned_department_id=link.assigned_department_id,
+                        snapshot_json=link.snapshot_json,
+                        created_by=db.info.get("actor_id", "system"),
+                    )
+                )
     project.row_version += 1
     audit(db, plan, "create_draft", request_id)
     return plan
@@ -280,6 +303,16 @@ def activate_plan(db, plan_id, version, approval_ref, request_id):
     plan.approval_ref = approval_ref
     project.current_plan_version_id = plan.id
     project.row_version += 1
+    from zoneinfo import ZoneInfo
+
+    from .config import settings
+    from .workflow import invalidate_plan, scan_project
+
+    invalidate_plan(db, project.id, "计划版本变更", request_id)
+    db.flush()
+    scan_project(
+        db, project, now().astimezone(ZoneInfo(settings.business_timezone)).date(), request_id, True
+    )
     audit(db, plan, "activate", request_id, before)
     audit(db, project, "change_current_plan", request_id)
     return plan

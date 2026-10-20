@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
-import { api, errorMessage, json } from "../api";
+import { api, errorMessage, json, versionHeader } from "../api";
 import type { Milestone } from "../types";
 import Modal from "./Modal.vue";
 import StatusBadge from "./StatusBadge.vue";
 import { useAuth } from "../store";
+import NodeActions from "./NodeActions.vue";
 const auth = useAuth();
 const props = defineProps<{ node: Milestone; planId: string }>();
 const emit = defineEmits<{ close: []; changed: [] }>();
@@ -13,6 +14,25 @@ const detail = ref<Milestone>(props.node),
   error = ref(""),
   success = ref(""),
   comment = ref("");
+const cancelReason = ref("");
+async function cancelNode() {
+  busy.value = true;
+  error.value = "";
+  try {
+    await api(`/milestones/${props.node.id}/cancel`, {
+      method: "POST",
+      headers: versionHeader(detail.value.row_version),
+      body: json({ reason: cancelReason.value }),
+    });
+    await load();
+    success.value = "节点已取消，旧待发提醒已失效，历史保留";
+    emit("changed");
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    busy.value = false;
+  }
+}
 const form = reactive({
   completion_flag: "unknown",
   actual_date: "",
@@ -112,6 +132,25 @@ onMounted(load);
           <dd>{{ detail.plan_item.source_ref || "未录入" }}</dd>
         </div>
       </dl>
+    </section>
+    <NodeActions :key="detail.plan_item.id" :node="detail" />
+    <section v-if="auth.can(detail.project_id)" class="form-section">
+      <details v-if="detail.lifecycle_status === 'active'">
+        <summary>取消节点</summary>
+        <p class="notice">
+          取消后不再产生新提醒。未发送旧稿会失效，已发送和执行记录保留。
+        </p>
+        <form @submit.prevent="cancelNode">
+          <label
+            >业务取消原因 *<textarea
+              v-model="cancelReason"
+              required
+              maxlength="500"
+            /></label
+          ><button :disabled="busy">确认取消节点</button>
+        </form>
+      </details>
+      <p v-else class="notice">节点已取消，保留历史计划及事实记录。</p>
     </section>
     <section v-if="auth.can(detail.project_id)" class="form-section">
       <h3>提交实际记录</h3>

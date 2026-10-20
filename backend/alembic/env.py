@@ -4,6 +4,7 @@ from sqlalchemy import pool, create_engine
 from app.config import settings
 from app.db import Base
 from app import models  # noqa: F401
+from app import workflow_models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))

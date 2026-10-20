@@ -2,5 +2,13 @@
   "stack": "PostgreSQL16/FastAPI/Vue",
   "browser_tests": "passed",
   "database_restart_persistence": "passed",
-  "project_count_after_restart": 6
+  "project_count_after_restart": 6,
+  "worker_scan": "passed",
+  "workflow_records_after_restart": {
+    "reminders": 1,
+    "notifications": 1,
+    "tasks": 1,
+    "feedback": 1,
+    "inbox": 1
+  }
 }

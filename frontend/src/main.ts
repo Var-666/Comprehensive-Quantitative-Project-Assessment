@@ -7,6 +7,8 @@ import ProjectDetail from "./views/ProjectDetail.vue";
 import MilestonesView from "./views/MilestonesView.vue";
 import OverviewView from "./views/OverviewView.vue";
 import PendingView from "./views/PendingView.vue";
+import ActionsView from "./views/ActionsView.vue";
+import WorkflowsView from "./views/WorkflowsView.vue";
 import "./style.css";
 
 const router = createRouter({
@@ -24,9 +26,9 @@ const router = createRouter({
       component: MilestonesView,
       meta: { title: "节点管理" },
     },
+    { path: "/actions", component: ActionsView, meta: { title: "标准动作" } },
+    { path: "/tasks", component: WorkflowsView, meta: { title: "提醒与待办" } },
     ...[
-      ["actions", "标准动作"],
-      ["tasks", "提醒与待办"],
       ["metrics", "量化评估"],
       ["analysis", "AI 智能分析"],
     ].map(([path, title]) => ({

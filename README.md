@@ -1,6 +1,6 @@
-# 项目总体量化评估智能体 · V0.1.1
+# 项目总体量化评估智能体 · V0.2.0
 
-第一阶段验收版本：Vue 3 / TypeScript / Vite / Pinia / Vue Router + FastAPI / SQLAlchemy / Alembic。页面连接真实 API 与数据库，所有业务接口强制登录、项目授权与服务端权限校验。计划编制人与批准人、实际提交人与核实人必须分离。验收基线已由用户于2026-10-20确认，见 [第一阶段基线](docs/PHASE1_BASELINE.md) 与 [逐项验收表](docs/PHASE1_ACCEPTANCE.md)。
+第一、二阶段版本：Vue 3 / TypeScript / Vite / Pinia / Vue Router + FastAPI / SQLAlchemy / Alembic。页面连接真实 API 与数据库，所有业务接口强制登录、项目授权与服务端权限校验。计划编制人与批准人、实际提交人与核实人必须分离。验收基线已由用户于2026-10-20确认，见 [第一阶段基线](docs/PHASE1_BASELINE.md) 与 [逐项验收表](docs/PHASE1_ACCEPTANCE.md)。
 
 ## 本地启动
 
@@ -63,7 +63,7 @@ Compose 将端口绑定到 127.0.0.1。容器启动执行 Alembic 迁移；不�
 
 已在官方 PostgreSQL 16 容器上实际运行迁移往返、alembic check、模拟数据初始化与完整 pytest；不再以离线SQL代替实例测试。可重复验证：`.venv/bin/python scripts/verify_postgres.py`。脚本使用随机容器名、随机密码及隔离数据库，结束后仅删除自己的测试容器。
 
-前后端 Docker 镜像可通过 `docker compose build` 构建；完整三容器浏览器验收使用 `.venv/bin/python scripts/verify_compose.py`，随机端口、随机项目名及数据卷避免影响开发环境，结束后清理本次验收资源。运行前需已构建镜像、本机安装 Chrome 和本地测试依赖。
+前后端 Docker 镜像可通过 `docker compose build` 构建；完整容器栈浏览器验收使用 `.venv/bin/python scripts/verify_compose.py`，随机端口、随机项目名及数据卷避免影响开发环境，结束后清理本次验收资源。运行前需已构建镜像、本机安装 Chrome 和本地测试依赖。
 
 ## 已实现及操作方式
 
@@ -73,7 +73,7 @@ Compose 将端口绑定到 127.0.0.1。容器启动执行 Alembic 迁移；不�
 - **实际记录**：详情中单独提交完成事实与实际日期。提交不等于完成；由独立审核人员核实、退回或标记争议并留痕。新提交不会替换先前已核实事实。来源说明不是正式附件；第一阶段未要求的证据文件存储未冒充实现。
 - **身份与权限**：Argon2密码哈希、数据库可撤销登录会话、HttpOnly/SameSite Cookie、CSRF、登录失败锁定，项目 admin/editor/reviewer/viewer 角色。未授权项目在列表和统计中不可见，直接访问也被拒绝；角色撤销对已有登录会话立即生效。
 - **Excel 导入**：上传、选择工作表/表头行、编辑字段映射、逐行验证、错误预览与 CSV 下载、人工勾选确认、事务写入、批次与拒绝提交原因留痕、幂等提交。禁止自动覆盖。
-- **项目总览**：只展示数据库中真实台账计数。其余四个主模块保留菜单并明确“尚未实现”，没有伪造提醒、财务指标或 AI 结果。
+- **项目总览**：只展示数据库中真实台账计数。标准动作、提醒与待办已接入真实后端；量化评估与AI智能分析留待第三阶段，明确“尚未实现”。
 
 ### Excel 使用
 
@@ -87,9 +87,49 @@ Compose 将端口绑定到 127.0.0.1。容器启动执行 Alembic 迁移；不�
 
 ### 模拟样本的边界
 
-`./scripts/seed.sh` 是显式开发夹具加载器，严格读取原 Excel 的计划日期及核实情况：P-H028 26 个节点、P-H031 24 个节点、P-H014 17 个节点。只加载第一阶段实体，动作/通知/财务/评价工作表不写入数据库。
+`./scripts/seed.sh` 是显式开发夹具加载器，严格读取原 Excel 的计划日期及核实情况：P-H028 26 个节点、P-H031 24 个节点、P-H014 17 个节点。该脚本只加载第一阶段实体。第二阶段动作草稿使用下方单独命令加载，不导入未经确认的历史通知状态、财务或评价。
 
 P-H028 来源仅有 V2，不虚构缺失的 V1；下一草稿从 V3 开始。“需关注”是原始关注说明，不与生命周期混用，暂以草稿保存；该映射集中在导入/样本加载器。含“合同约定（演示，未核实）”的日期保存为 unconfirmed，不变成已核实合同事实。样本的“已核实”均明确标注为虚构夹具，不是真实审核证据。
+
+## 第二阶段操作
+
+权限与计算边界见 [第二阶段基线](docs/PHASE2_BASELINE.md)。七个主菜单保持原名，新增功能位于“标准动作”“提醒与待办”及节点详情。
+
+1. 用系统管理员在“标准动作”编制模板及动作项，保存草稿并“提交业务确认”；换独立审核账号批准。可选按项目类型限制适用范围。已批准版本只读，可复制为新版本。
+2. 在同页“工作日历”编制企业逐日标记（如需工作日），独立批准。周末预填不是正式节假日结论。再配置“提醒规则”的天数、日历版本、接收角色和追补窗口，并独立批准。
+3. 在节点详情“关联动作模板”选择已批准且适用的动作，保留快照。已有动作不会通过取消勾选被无痕删除；调整使用新计划或模板版本。草稿计划不会触发提醒。
+4. “提醒与待办 → 提醒扫描”可预览每个节点的触发日期与跳过原因，系统管理员可对有授权的项目确认生成草稿与待办；重复扫描不会重复创建。生产环境生成只接受当天业务日期。
+5. 编辑通知草稿并提交审核，另一账号核对内容版本、依据和接收人后批准。此时仍是“审核通过待发送”；项目编辑另行“发布站内通知”，收件人登录“站内收件箱”查看并标记已读。外部渠道被后端拒绝。
+6. “执行任务 → 处理任务”明确分派有项目编辑权限的执行人；执行人填写处理情况、证据引用和声称完成情况。另一项目审核人员可接受、退回或标记异议。核实任务不会写节点实际记录。
+
+开发脚本默认同时启动独立扫描进程，每60秒按Asia/Shanghai当前业务日扫描，只使用批准配置，生成草稿/待办，不审核、不发送。可用 `START_REMINDER_WORKER=0 ./scripts/dev.sh` 只启动前后端，或单独运行：
+
+```bash
+cd backend
+../.venv/bin/python -m app.worker --once
+# 常驻扫描；Ctrl+C停止
+../.venv/bin/python -m app.worker --interval 60
+# 可选：加载原Excel的11个模拟模板草稿/24项动作，重复运行不覆盖。
+../.venv/bin/python -m app.phase2_seed --username local-editor
+```
+
+模拟动作保留“待业务确认”和来源规则说明；不自动批准、绑定，也不虚构正式接收角色、核实标准或节假日日历。Compose包含独立worker服务，等待backend健康后启动。
+
+新增API（完整参数见OpenAPI）：
+
+| 功能 | 路径（均为 `/api/v1` 前缀） |
+| --- | --- |
+| 模板 | `GET/POST /action-templates`、`GET/PATCH /action-templates/{id}` |
+| 规则 | `GET/POST /reminder-rules`、`PATCH /reminder-rules/{id}`、`POST /reminder-rules/preview-trigger` |
+| 日历 | `GET/POST /work-calendars`、`GET/PATCH /work-calendars/{id}` |
+| 配置审核 | 上述三类资源的 `POST /{资源}/{id}/submit-review`、`/review`、`/retire` |
+| 节点动作及取消 | `GET /milestones/{id}/suggested-actions`、`GET/POST /milestones/{id}/action-links`、`POST /milestones/{id}/cancel` |
+| 扫描 | `POST /reminder-jobs/simulate`、`POST /reminder-jobs/run`、`GET /reminders` |
+| 通知 | `GET /notifications`、`GET /notifications/{id}`、`PATCH /notifications/{id}/draft`、`POST /notifications/{id}/submit-review`、`/review`、`/dispatch` |
+| 收件箱 | `GET /inbox`、`POST /inbox/{id}/read` |
+| 任务反馈 | `GET /tasks`、`GET/PATCH /tasks/{id}`、`POST /tasks/{id}/feedback`、`POST /task-feedback/{id}/verify`、`GET /tasks/{id}/audit-events` |
+
+配置编辑/审核、通知更新/审核/发送、任务更新/反馈均使用If-Match；生成与站内发布另有数据库防重约束。执行人必须有项目编辑权限，不能通过任务分派绕过只读角色限制。
 
 ## API
 
@@ -122,9 +162,9 @@ npm run test:e2e
 
 生产配置须 `APP_ENV=production`、`DEMO_MODE=false`、PostgreSQL及 `COOKIE_SECURE=true`，并设置真实HTTPS域名的 `ALLOWED_ORIGINS`；企业SSO/组织同步和证据存储是后续集成，不以样本账号代替企业实际人员。
 
-测试意图涵盖：防止并发覆盖、保存历史计划、禁止跨项目版本、实际提交不代表核实、导入预览不写业务表、整批原子性、重复提交防重、预览后冲突二次检查、异常文件/公式输入拒绝，以及对照全部 67 个样本节点日期和核实事实。第二/三阶段的提醒与指标用例未实现、未声称通过。
+测试意图涵盖：防止并发覆盖、保存历史计划、禁止跨项目版本、实际提交不代表核实、导入预览不写业务表、整批原子性、重复提交防重、预览后冲突二次检查、异常文件/公式输入拒绝，以及对照全部 67 个样本节点日期和核实事实。第二阶段另有确定性提醒、工作日历、版本失效、审发分离、任务与反馈测试；第三阶段指标及AI用例未实现，不声称通过。
 
-具体执行记录、限制及缺失依据见 [docs/DELIVERY.md](docs/DELIVERY.md)。
+第二阶段执行记录、限制及缺失依据见 [第二阶段验收](docs/PHASE2_ACCEPTANCE.md)；第一阶段历史交付见 [docs/DELIVERY.md](docs/DELIVERY.md)。
 
 ## 目录
 

@@ -160,7 +160,7 @@ test('navigation, errors and desktop geometry expose real state', async ({ page 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.screenshot({ path: 'test-results/projects-1440.png', fullPage: true });
   await page.getByRole('link', { name: '标准动作', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '此模块尚未实现' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '标准动作配置' })).toBeVisible();
   await page.goto('/projects');
   await page.route('**/api/v1/projects?**', route => route.abort());
   await page.getByLabel('搜索项目').fill('故障测试');

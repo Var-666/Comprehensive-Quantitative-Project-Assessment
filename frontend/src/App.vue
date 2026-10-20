@@ -53,7 +53,7 @@ const nav = [
         >
       </nav>
       <div class="sidebar-foot">
-        <p>第一期 · 基础数据管理</p>
+        <p>第一期 · 项目与执行管理</p>
         <small>{{
           auth.user.demo_mode ? "开发/测试 · 模拟数据" : "业务数据环境"
         }}</small>

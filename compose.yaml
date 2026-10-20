@@ -16,6 +16,7 @@ services:
       timeout: 3s
       retries: 10
   backend:
+    image: project-evaluation-backend
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -29,6 +30,21 @@ services:
       - ./模拟业务测试数据 V0.1.xlsx:/app/模拟业务测试数据 V0.1.xlsx:ro
     depends_on:
       db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+  worker:
+    image: project-evaluation-backend
+    command: ["python", "-m", "app.worker", "--interval", "60"]
+    environment:
+      APP_ENV: development
+      DEMO_MODE: "true"
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-project_eval}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-project_eval}
+    depends_on:
+      backend:
         condition: service_healthy
   frontend:
     build:
