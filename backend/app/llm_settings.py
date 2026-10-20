@@ -471,21 +471,22 @@ def test_model(db, obj, model, request_id):
 def import_environment(db, version, request_id):
     if db.get(LLMConfig, SERVICE_ID):
         fail(409, "LLM_ADMIN_CONFIG_EXISTS", "管理员配置已存在，拒绝被旧环境覆盖")
+    key, model = LLMService.legacy_values()
     base = validate_base_url(settings.ai_base_url or DEFAULT_BASE_URL)
     obj = lock(db, version, True)
     obj.base_url = base
     obj.mode = "mock"
     obj.enabled = False
-    if settings.ai_api_key.get_secret_value():
-        obj.encrypted_api_key = CredentialVault.encrypt(settings.ai_api_key)
+    if key.get_secret_value():
+        obj.encrypted_api_key = CredentialVault.encrypt(key)
         obj.credential_updated_at = now()
-    if settings.ai_model:
+    if model:
         db.add(
             LLMModel(
                 service_id=obj.id,
                 endpoint_revision=obj.endpoint_revision,
-                model_id=settings.ai_model,
-                display_name=settings.ai_model,
+                model_id=model,
+                display_name=model,
                 source="manual",
             )
         )

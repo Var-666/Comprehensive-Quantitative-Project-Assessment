@@ -199,7 +199,7 @@ cd backend
 
 币种是命令调用者明确提供的演示假设，原表没有单独币种字段。仅development/test + DEMO_MODE=true可执行，6条计划和1条有发生事实的实际记录；重复不覆盖。
 
-默认 `AI_PROVIDER=mock` 不调用模型。真实模式配置 `.env` 中 `AI_PROVIDER=openai_compatible`、`AI_BASE_URL`（HTTPS，包含例如/v1前缀）、`AI_MODEL`、`AI_API_KEY`，开启 `AI_EXTERNAL_ENABLED=true` 并重启服务；页面还须本次显式同意。端点须支持 `/chat/completions` 严格JSON Schema，具体模型由部署方选择。仅外送事实ID/类别/类型，正文留在本系统；模型不能自由改写事实或补充数字。网络/格式错误会明确失败，不冒充Mock成功。密钥不返回前端，不写日志或Git。未配置真实模型时，测试仅覆盖Mock及HTTP传输合约替身。
+初始模式为Mock。V0.4.0优先通过“系统设置”保存模型配置；存在数据库管理员配置时，旧 `.env` 中的 `AI_*` 不覆盖它，Web移除Key也不会回退环境Key。旧环境模式仅在尚无数据库配置时兼容，需 `AI_EXTERNAL_ENABLED=true`；无论配置来源，业务页面都须本次显式同意外送。端点须兼容 `/chat/completions` 严格JSON Schema；仅外送事实ID/类别/类型，正文、名称、日期、金额留在本系统。网络/格式错误明确失败，不冒充Mock成功。真实CMHK联调结果及限制见[综合验收](docs/SYSTEM_ACCEPTANCE.md)，基础短调用通过不能替代严格结构化报告验证。
 
 | 新增功能 | `/api/v1` 路径 |
 |---|---|
@@ -267,3 +267,20 @@ npm --prefix frontend run test:llm
 ```
 
 HTTPS浏览器测试使用独立的 `browser_llm_app` 测试入口与MockTransport，仅允许APP_ENV=test，不在产品入口启用。结果与真实CMHK平台连接严格区分；真实Key未配置时不会请求平台，也不会显示连接成功。`test:llm`的Chrome仅信任本地测试自签证书，MaaS客户端TLS验证保持开启。
+
+## V0.4.0 综合联调与验收
+
+2026-10-20完成本轮技术验收，完整范围、修复、初次失败与最终结果见[综合验收记录](docs/SYSTEM_ACCEPTANCE.md)。SQLite、PostgreSQL各120项pytest通过；本机业务浏览器10项、模型设置4项通过；最终Docker栈业务浏览器10项及HTTPS配置重启验证通过。真实CMHK使用隔离模拟库完成默认DeepSeek与独立GLM通知场景各4次严格Schema业务调用，不能解释为企业正式业务验收。
+
+GLM在本次通知和工作安排调用分别耗时约21.45及30.75秒，使用隔离验收配置的60秒时限；本机原20秒配置、默认/场景模型及业务记录未因此改动。需要选用GLM的管理员应先评估并调整已有超时设置。模型输出仍可能不合规，系统会拒绝，不自动重试或降级。列表发现、基础调用通过、真实报告通过是不同验证层次。
+
+默认自动化测试不外送业务数据。复跑真实业务联调须使用已授权且启用的数据库模型配置，并显式设置开关（最多4次调用，只发送模拟事实描述）：
+
+```bash
+cd backend
+RUN_REAL_LLM_ACCEPTANCE=1 ../.venv/bin/pytest -q tests/test_system_acceptance.py
+# 可选：仅在临时验收库指定已通过基础验证的通知模型及既有60秒上限
+RUN_REAL_LLM_ACCEPTANCE=1 REAL_NOTIFICATION_MODEL=CM-Pub-GLM-5.1-PD REAL_LLM_TIMEOUT_SECONDS=60 ../.venv/bin/pytest -q tests/test_system_acceptance.py
+```
+
+用例只读本机配置，复制加密凭据到临时测试库，不复制业务表；审核、发布、财务和报告操作均在模拟库完成。缺少Key、默认模型未验证或未启用MaaS会明确失败，不自动启用。不要将 `TEST_DATABASE_URL` 指向现有业务数据库。机器记录为 `docs/real-model-verification.json`、`docs/real-model-scenario-verification.json` 及 `docs/system-acceptance-results.json`。

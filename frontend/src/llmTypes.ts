@@ -57,7 +57,7 @@ export const llmState: Record<string, string> = {
   forbidden: "无操作权限",
   unsupported: "接口可能不支持",
   invalid: "响应格式待适配",
-  available: "实际调用通过",
+  available: "基础调用通过",
   untested: "尚未测试",
   incomplete: "输出被截断，尚未完成",
   empty: "列表为空",

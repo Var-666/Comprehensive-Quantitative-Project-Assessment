@@ -580,6 +580,45 @@ def test_environment_migration_is_explicit_and_admin_config_wins(client, monkeyp
     assert config(client)["key_configured"] is False
 
 
+@pytest.mark.parametrize("kind", ["key_in_model", "key_in_url", "invalid_key", "long_model"])
+def test_legacy_environment_cannot_publish_credentials_or_bypass_input_validation(
+    client, monkeypatch, caplog, kind
+):
+    """An accidental env copy/paste must not make a secret a public model ID or report field."""
+    from fastapi import HTTPException
+    from pydantic import SecretStr
+
+    secret = KEY if kind != "invalid_key" else "invalid credential with whitespace"
+    monkeypatch.setattr(settings, "ai_provider", "openai_compatible")
+    monkeypatch.setattr(settings, "ai_external_enabled", True)
+    monkeypatch.setattr(settings, "ai_api_key", SecretStr(secret))
+    monkeypatch.setattr(
+        settings,
+        "ai_base_url",
+        "https://maas-api.cmhk.com/v1" + ("/" + secret if kind == "key_in_url" else ""),
+    )
+    monkeypatch.setattr(
+        settings,
+        "ai_model",
+        "legacy-model-" + secret
+        if kind == "key_in_model"
+        else "x" * 257
+        if kind == "long_model"
+        else "legacy-valid-model",
+    )
+    response = client.post(
+        BASE + "/import-environment", headers={"If-Match": "0"}, json={"confirmed": True}
+    )
+    assert response.status_code == 422
+    assert config(client)["source"] == "environment"
+    assert value(client.get(BASE + "/models")) == []
+    assert secret not in response.text and secret not in client.get(BASE).text
+    with pytest.raises(HTTPException) as failure:
+        LLMService.runtime()
+    assert failure.value.status_code == 422
+    assert secret not in caplog.text
+
+
 def test_missing_master_key_cannot_store_plaintext_and_address_changes_clear_credential(
     client, monkeypatch
 ):

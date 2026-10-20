@@ -57,13 +57,24 @@ def arrange(facts, allow_external=False, *, db=None, scenario="analysis"):
     descriptors = [{k: f[k] for k in ("id", "section", "kind")} for f in facts]
     schema = Arrangement.model_json_schema()
     for name in ("overview", "attention"):
-        schema["properties"][name]["items"] = {"type": "string", "enum": sorted(allowed)}
+        section_ids = sorted(f["id"] for f in facts if f["section"] == name)
+        schema["properties"][name]["items"] = {
+            "type": "string",
+            "enum": section_ids or sorted(allowed),
+        }
+    allowed_suggestions = [
+        code
+        for code in SUGGESTIONS
+        if code != "verify_finance" or any(f.get("financial") for f in facts)
+    ]
+    schema["properties"]["suggestion_codes"]["items"]["enum"] = allowed_suggestions
+    schema["properties"]["suggestion_codes"]["maxItems"] = len(allowed_suggestions)
     body = {
         "model": runtime.model_id,
         "messages": [
             {
                 "role": "system",
-                "content": "仅对给定事实ID进行分类与排序；返回JSON，严格符合Schema。overview和attention分别包含对应section的所有ID各一次；不得生成事实、数值、文字或额外字段。选择建议代码。",
+                "content": "仅对给定事实ID进行分类与排序；返回JSON，严格符合Schema。overview和attention分别包含对应section的所有ID各一次；不得遗漏、重复或跨section引用。不得生成事实、数值、文字或额外字段。suggestion_codes只能从Schema给出的允许枚举选择，每个代码最多一次，严禁重复；不适用时返回空数组。",
             },
             {"role": "user", "content": json.dumps(descriptors)},
         ],

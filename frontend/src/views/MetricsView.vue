@@ -178,7 +178,7 @@ onMounted(load);
         :disabled="busy || !auth.can(selected.project_id)"
         @click="prepareReport"
       >
-        <Icon name="imgIconAiVector" />生成阶段报告
+        生成阶段报告
       </button>
     </div>
   </div>

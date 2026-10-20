@@ -14,10 +14,11 @@ test('HTTPS settings persist credentials and independent discovered/model-tested
  await page.screenshot({path:'test-results-llm/llm-settings-unconfigured.png',fullPage:true});
  await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();d=page.getByRole('dialog');await expect(d.getByLabel('新的 API Key *')).toHaveAttribute('type','password');await page.screenshot({path:'test-results-llm/llm-key-dialog.png'});await d.getByLabel('新的 API Key *').fill(key);await d.getByRole('button',{name:'保存新密钥',exact:true}).click();await expect(d).toHaveCount(0);
  const settingsResponse=await page.request.get('/api/v1/settings/llm');expect(await settingsResponse.text()).not.toContain(key);
+ await page.getByRole('button',{name:'测试连接',exact:true}).click();d=page.getByRole('dialog');await expect(d).toContainText('列表读取成功');await expect(d).toContainText('尚未执行');await d.getByRole('button',{name:'关闭结果',exact:true}).click();
  await page.getByRole('button',{name:'刷新模型列表',exact:true}).click();await expect(page.getByRole('status')).toContainText('自动验证完成：已测试 3/3 个，2 个通过，1 个未通过');
- let row=page.getByRole('row').filter({hasText:'http-double-analysis'});await expect(row).toContainText('实际调用通过');
+ let row=page.getByRole('row').filter({hasText:'http-double-analysis'});await expect(row).toContainText('基础调用通过');
  await expect(page.getByRole('row').filter({hasText:'http-double-blocked'})).toContainText('当前账号无权限');
- await expect(page.getByRole('row').filter({hasText:'http-double-notice'})).toContainText('实际调用通过');expect(automaticTests).toHaveLength(3);
+ await expect(page.getByRole('row').filter({hasText:'http-double-notice'})).toContainText('基础调用通过');expect(automaticTests).toHaveLength(3);
  await page.getByRole('button',{name:'刷新模型列表',exact:true}).click();await expect(page.getByRole('status')).toContainText('跳过 2 个已验证或已禁用模型');expect(automaticTests).toHaveLength(4);
  await page.getByRole('button',{name:/先连接服务并获取模型列表/}).click();await page.locator('#default-model-options').getByRole('button',{name:/HTTP替身：分析测试模型/}).click();
  await page.getByRole('combobox',{name:'通知与工作安排草稿',exact:true}).selectOption({label:'HTTP替身：通知测试模型'});

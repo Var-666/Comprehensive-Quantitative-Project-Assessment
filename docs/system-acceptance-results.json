@@ -1,0 +1,32 @@
+{
+  "recorded_on": "2026-10-20",
+  "base_commit": "88d24cb",
+  "scope": "V0.4.0 technical integration using simulated business data",
+  "sqlite": { "passed": 120, "skipped": 0, "warnings": 1 },
+  "postgresql": { "passed": 120, "skipped": 0, "warnings": 1 },
+  "local_business_browser": { "passed": 10 },
+  "llm_settings_browser": { "passed": 4 },
+  "docker_business_browser": { "passed": 10 },
+  "frontend_type_check_and_build": "passed",
+  "format_checks": "passed",
+  "migration_checks": "passed",
+  "docker_restart_persistence": "passed",
+  "https_credential_lifecycle": {
+    "status": "passed",
+    "uses_real_provider": false,
+    "artifact": "llm-https-verification.json"
+  },
+  "real_model_runs": [
+    "real-model-verification.json",
+    "real-model-scenario-verification.json"
+  ],
+  "desktop_layout": {
+    "screens": 8,
+    "widths": [1440, 1280, 1024],
+    "height": 900,
+    "status": "passed",
+    "full_figma_pixel_acceptance": false
+  },
+  "enterprise_business_acceptance": "not_performed",
+  "details": "SYSTEM_ACCEPTANCE.md"
+}

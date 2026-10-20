@@ -1,0 +1,69 @@
+{
+  "kind": "real_cmhk",
+  "calls": [
+    {
+      "model_id": "CM-Pub-GLM-5.1-PD",
+      "strict_schema": true,
+      "fact_count": 3,
+      "outbound_fields": [
+        "id",
+        "section",
+        "kind"
+      ],
+      "http_status": 200,
+      "elapsed_seconds": 21.45
+    },
+    {
+      "model_id": "CM-Pub-DeepSeek-V4-Flash",
+      "strict_schema": true,
+      "fact_count": 5,
+      "outbound_fields": [
+        "id",
+        "section",
+        "kind"
+      ],
+      "http_status": 200,
+      "elapsed_seconds": 2.21
+    },
+    {
+      "model_id": "CM-Pub-GLM-5.1-PD",
+      "strict_schema": true,
+      "fact_count": 5,
+      "outbound_fields": [
+        "id",
+        "section",
+        "kind"
+      ],
+      "http_status": 200,
+      "elapsed_seconds": 30.75
+    },
+    {
+      "model_id": "CM-Pub-DeepSeek-V4-Flash",
+      "strict_schema": true,
+      "fact_count": 5,
+      "outbound_fields": [
+        "id",
+        "section",
+        "kind"
+      ],
+      "http_status": 200,
+      "elapsed_seconds": 1.2
+    }
+  ],
+  "completed_steps": [
+    "sample_excel_and_project_plan_action_rule_approval",
+    "real_notice_draft_independent_review_and_in_app_dispatch",
+    "assigned_task_feedback_verification_and_separate_actual_fact",
+    "verified_finance_snapshot_stage_and_work_plan_reports_approval_export",
+    "existing_P_H028_excel_project_real_stage_report"
+  ],
+  "status": "passed",
+  "source_timeout_seconds": 20,
+  "acceptance_timeout_seconds": 60,
+  "default_model": "CM-Pub-DeepSeek-V4-Flash",
+  "notification_model": "CM-Pub-GLM-5.1-PD",
+  "notification_follows_default": false,
+  "scenario_override_used": true,
+  "source_configuration_unchanged": true,
+  "verified_at": "2026-10-20T07:51:39.828498+00:00"
+}

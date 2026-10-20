@@ -20,6 +20,37 @@ def payload(code="P-TEST"):
     }
 
 
+def test_racing_editors_cannot_overwrite_another_committed_project_change(client, factory):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    p, _ = create(client, "P-RACE")
+    barrier = Barrier(2)
+
+    def edit(name):
+        barrier.wait(timeout=10)
+        return name, client.patch(
+            f"/api/v1/projects/{p['id']}",
+            headers={"If-Match": str(p["row_version"])},
+            json={**payload("P-RACE"), "project_name": name},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(edit, ["并发编制A", "并发编制B"]))
+    assert sorted(r.status_code for _, r in responses) == [200, 409]
+    winner = next(name for name, r in responses if r.status_code == 200)
+    with factory() as db:
+        assert db.get(Project, p["id"]).project_name == winner
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.aggregate_id == p["id"], AuditEvent.action == "update")
+            )
+            == 1
+        ), "只有获胜的事务留下修改审计；失败请求不能部分提交"
+
+
 def create(client, code="P-TEST"):
     response = client.post("/api/v1/projects", json=payload(code))
     assert response.status_code == 201, response.text

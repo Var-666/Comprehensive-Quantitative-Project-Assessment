@@ -580,7 +580,7 @@ onMounted(() => {
         <div>
           <h3>可用模型</h3>
           <p>
-            刷新后自动测试未验证的已启用模型，每次最多128个输出token；已验证模型跳过，不支持列表接口时可手动添加。
+            刷新后自动测试未验证的已启用模型，每次最多128个输出token；已验证模型跳过。基础测试验证短文本调用，报告还须通过结构化输出和事实引用校验。
           </p>
         </div>
         <div class="actions">
@@ -606,7 +606,7 @@ onMounted(() => {
               <th>模型 ID</th>
               <th>显示名称</th>
               <th>来源</th>
-              <th>连接可用性</th>
+              <th>基础调用验证</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -873,7 +873,11 @@ onMounted(() => {
       class="llm-test-field"
     >
       <strong>{{ item.label }}</strong
-      ><span>{{ llmState[item.value] || item.value }}</span>
+      ><span>{{
+        item.label === "模型列表查询" && item.value === "available"
+          ? "列表读取成功"
+          : llmState[item.value] || item.value
+      }}</span>
     </div>
     <small class="muted"
       >最近测试 {{ displayTime(result.tested_at)

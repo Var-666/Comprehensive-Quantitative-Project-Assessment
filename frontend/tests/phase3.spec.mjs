@@ -8,6 +8,15 @@ async function login(page,username='accept-editor'){
 }
 async function switchUser(page,user){await page.getByRole('button',{name:'退出登录'}).click();await login(page,user);}
 async function selectReportProject(page){await page.getByRole('combobox',{name:'报告项目',exact:true}).selectOption({label:'P-H028 · 7500DWT 化学品船'});}
+
+test('report service errors are visible and retry reuses the same submission key',async({page})=>{
+ await login(page);await page.getByRole('link',{name:'AI 智能分析',exact:true}).click();await selectReportProject(page);await page.getByLabel('报告截止日').fill('2026-10-19');
+ const keys=[];page.on('request',r=>{if(r.url().endsWith('/reports/draft'))keys.push(r.headers()['idempotency-key']);});
+ const pattern='**/api/v1/projects/*/reports/draft';
+ await page.route(pattern,route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({success:false,error:{code:'MODEL_UNAVAILABLE',message:'模型服务暂时不可用，测试故障',fields:[],retryable:false},meta:{request_id:'browser-recovery-fixture'}})}));
+ await page.getByRole('button',{name:'生成报告草稿',exact:true}).click();await expect(page.getByRole('alert')).toContainText('模型服务暂时不可用');await expect(page.getByRole('button',{name:'生成报告草稿',exact:true})).toBeEnabled();await expect(page.getByRole('status')).toHaveCount(0);await expect(page.getByLabel('报告截止日')).toHaveValue('2026-10-19');
+ await page.unroute(pattern);await page.getByRole('button',{name:'生成报告草稿',exact:true}).click();await expect(page.getByRole('status')).toContainText('报告草稿已生成并保存');expect(keys).toHaveLength(2);expect(keys[0]).toBeTruthy();expect(keys[1]).toBe(keys[0]);
+});
 test('trial metrics trace their evidence and frozen reports require an independent reviewer',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await login(page);

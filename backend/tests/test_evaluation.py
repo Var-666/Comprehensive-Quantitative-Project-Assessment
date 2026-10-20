@@ -287,7 +287,19 @@ def test_mock_never_uses_network_and_real_requires_explicit_authorization(monkey
 
 
 @pytest.mark.parametrize(
-    "mode", ["valid", "unknown_fact", "omitted_fact", "server_error", "timeout", "free_text"]
+    "mode",
+    [
+        "valid",
+        "unknown_fact",
+        "omitted_fact",
+        "server_error",
+        "timeout",
+        "free_text",
+        "duplicate_suggestions",
+        "forbidden_finance",
+        "cross_section",
+        "truncated",
+    ],
 )
 def test_real_adapter_contract_rejects_invented_facts_without_fallback(monkeypatch, mode):
     import json
@@ -310,6 +322,11 @@ def test_real_adapter_contract_rejects_invented_facts_without_fallback(monkeypat
     def handler(request):
         calls.append(request)
         assert "800" not in request.content.decode() and "敏感" not in request.content.decode()
+        body = json.loads(request.content)
+        codes = body["response_format"]["json_schema"]["schema"]["properties"]["suggestion_codes"][
+            "items"
+        ]["enum"]
+        assert "verify_finance" not in codes, "未外送财务事实时Schema也不能授权财务建议"
         if mode == "timeout":
             raise httpx.ReadTimeout("network", request=request)
         if mode == "server_error":
@@ -321,10 +338,21 @@ def test_real_adapter_contract_rejects_invented_facts_without_fallback(monkeypat
             content["overview"] = []
         if mode == "free_text":
             content["invented_text"] = "已全部到账"
+        if mode == "duplicate_suggestions":
+            content["suggestion_codes"] = ["prepare_actions", "prepare_actions"]
+        if mode == "forbidden_finance":
+            content["suggestion_codes"] = ["verify_finance"]
+        if mode == "cross_section":
+            content["overview"], content["attention"] = [], ["A"]
         return httpx.Response(
             200,
             json={
-                "choices": [{"finish_reason": "stop", "message": {"content": json.dumps(content)}}]
+                "choices": [
+                    {
+                        "finish_reason": "length" if mode == "truncated" else "stop",
+                        "message": {"content": json.dumps(content)},
+                    }
+                ]
             },
         )
 

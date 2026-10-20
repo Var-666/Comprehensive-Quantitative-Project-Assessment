@@ -3,12 +3,13 @@
 import logging
 from dataclasses import dataclass
 
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 from sqlalchemy import select
 
 from .config import settings
 from .llm_models import SERVICE_ID, LLMCallLog, LLMConfig, LLMModel, LLMSelection
 from .llm_provider import OpenAICompatibleAdapter, ProviderError
+from .llm_schemas import CredentialInput, ManualModelInput
 from .llm_secrets import CredentialVault
 from .services import fail
 
@@ -28,6 +29,28 @@ class RuntimeConfig:
 
 
 class LLMService:
+    @staticmethod
+    def legacy_values():
+        try:
+            key = (
+                CredentialInput(api_key=settings.ai_api_key).api_key
+                if settings.ai_api_key.get_secret_value()
+                else SecretStr("")
+            )
+            model = (
+                ManualModelInput(model_id=settings.ai_model).model_id if settings.ai_model else None
+            )
+        except ValidationError:
+            fail(422, "LLM_ENVIRONMENT_INVALID", "旧环境模型或凭据格式无效，请通过系统设置重新配置")
+        secret = key.get_secret_value()
+        if secret and (secret in settings.ai_base_url or secret in (model or "")):
+            fail(
+                422,
+                "LLM_CREDENTIAL_PUBLIC_VALUE_CONFLICT",
+                "旧环境地址或模型字段含凭据，已拒绝公开或迁移",
+            )
+        return key, model
+
     @staticmethod
     def legacy_configured():
         return bool(
@@ -98,12 +121,13 @@ class LLMService:
                 "MODEL_NOT_CONFIGURED",
                 "请配置服务地址、模型和凭据，或由管理员在系统设置迁移旧环境配置",
             )
+        key, model = cls.legacy_values()
         return RuntimeConfig(
             "openai_compatible",
             "environment",
             settings.ai_base_url,
-            settings.ai_api_key,
-            settings.ai_model,
+            key,
+            model,
             settings.ai_timeout_seconds,
             settings.ai_external_enabled,
         )

@@ -291,7 +291,7 @@ onMounted(async () => {
         "
         @click="generate"
       >
-        <Icon name="imgIconAiVector" />{{ busy ? "处理中…" : "生成报告草稿" }}
+        <Icon name="imgVectorSparkles" />{{ busy ? "处理中…" : "生成报告草稿" }}
       </button>
       <p class="muted">报告由编辑生成，另一审核人批准；快照保留生成时事实。</p>
       <h3>已保存报告</h3>
