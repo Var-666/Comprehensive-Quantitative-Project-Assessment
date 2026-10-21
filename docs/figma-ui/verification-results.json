@@ -1,0 +1,91 @@
+{
+  "verified_on": "2026-10-21",
+  "application_source_commit": "7287a8ccb0dfb7b6199c4906f0f729ea0a904b51",
+  "baseline_commit": "836691ff8b3b5ad550af7657cb98891eef8ca6e7",
+  "checks": [
+    {
+      "name": "sqlite_and_checks",
+      "command": "./scripts/check.sh",
+      "status": "passed",
+      "terminal_result": "123 passed, 1 warning in 35.22s",
+      "tests_passed": 123
+    },
+    {
+      "name": "postgresql",
+      "command": ".venv/bin/python scripts/verify_postgres.py",
+      "status": "passed",
+      "terminal_result": "123 passed, 1 warning in 76.31s",
+      "tests_passed": 123
+    },
+    {
+      "name": "business_browser",
+      "command": "npm --prefix frontend run test:e2e",
+      "status": "passed",
+      "terminal_result": "23 passed (1.1m)",
+      "tests_passed": 23
+    },
+    {
+      "name": "settings_browser",
+      "command": "npm --prefix frontend run test:llm",
+      "status": "passed",
+      "terminal_result": "5 passed (15.3s)",
+      "tests_passed": 5
+    },
+    {
+      "name": "final_capture",
+      "command": "npm --prefix frontend run test:e2e -- tests/ui-fidelity.spec.mjs --grep 'reproducible|forms and drawers'",
+      "status": "passed",
+      "terminal_result": "2 passed (25.4s)",
+      "tests_passed": 2
+    },
+    {
+      "name": "final_build",
+      "command": "npm --prefix frontend run build",
+      "status": "passed",
+      "terminal_result": "built in 1.99s",
+      "tests_passed": null
+    }
+  ],
+  "geometry": {
+    "workspaces": 8,
+    "widths": [
+      1440,
+      1280,
+      1024
+    ],
+    "height": 900,
+    "records": 24,
+    "horizontal_overflow": false,
+    "sidebar_width": 236,
+    "missing_images": 0
+  },
+  "native_dropdowns": {
+    "expected": 13,
+    "exercised": 13
+  },
+  "screenshots": {
+    "before": 66,
+    "after": 66,
+    "figma": 19
+  },
+  "runtime_smoke": {
+    "frontend": "http://127.0.0.1:5173",
+    "api": "http://127.0.0.1:8001",
+    "health_status": 200,
+    "authenticated_dashboard_status": 200,
+    "unauthenticated_dashboard_status": 401,
+    "unauthenticated_settings_status": 401,
+    "workspaces_visited": 8,
+    "browser_errors": 0,
+    "page_alerts": 0,
+    "horizontal_overflow": false,
+    "model_calls_triggered": false,
+    "local_session_logged_out": true
+  },
+  "limits": [
+    "Figma provides 1440px designs; 1280px and 1024px verify responsive component rules.",
+    "Code Connect is unavailable for the current Figma plan/seat.",
+    "Preserved business differences are documented in FIGMA_UI_ACCEPTANCE.md.",
+    "UI engineering acceptance does not constitute enterprise business acceptance."
+  ]
+}

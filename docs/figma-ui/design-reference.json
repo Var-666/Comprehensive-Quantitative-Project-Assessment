@@ -963,7 +963,9 @@
       "key": 635,
       "manual": 700,
       "result": 650
-    }
+    },
+    "metric_formula_drawer_width": 620,
+    "metric_evidence_drawer_width": 640
   },
   "typography": {
     "family": "Noto Sans SC",
