@@ -94,32 +94,39 @@ onMounted(() => load());
   </p>
   <p v-if="success" class="success" role="status">{{ success }}</p>
   <template v-if="tab === 'templates'">
-    <form class="card filters" @submit.prevent="load(1)">
-      <label
-        >节点类型<select v-model="type">
-          <option value="">全部</option>
-          <option v-for="n in catalog.nodeTypes" :key="n.code" :value="n.code">
-            {{ n.display_name }}
-          </option>
-        </select></label
-      ><label
-        >模板状态<select v-model="status">
-          <option value="">全部</option>
-          <option
-            v-for="s in ['draft', 'pending_review', 'approved', 'retired']"
-            :key="s"
-            :value="s"
-          >
-            {{ label(s) }}
-          </option>
-        </select></label
-      ><button :disabled="busy">查询模板</button>
-    </form>
     <p v-if="busy" class="empty" role="status">正在加载动作模板…</p>
     <div v-else class="workflow-split template-split">
       <section class="card queue">
         <h3>标准动作模板</h3>
         <p class="muted">按节点类型管理 · 共{{ data.total }}个版本</p>
+        <form
+          class="filters compact template-filters"
+          @submit.prevent="load(1)"
+        >
+          <label
+            >节点类型<select v-model="type">
+              <option value="">全部</option>
+              <option
+                v-for="n in catalog.nodeTypes"
+                :key="n.code"
+                :value="n.code"
+              >
+                {{ n.display_name }}
+              </option>
+            </select></label
+          ><label
+            >模板状态<select v-model="status">
+              <option value="">全部</option>
+              <option
+                v-for="s in ['draft', 'pending_review', 'approved', 'retired']"
+                :key="s"
+                :value="s"
+              >
+                {{ label(s) }}
+              </option>
+            </select></label
+          ><button :disabled="busy">查询模板</button>
+        </form>
         <p v-if="!data.items.length" class="empty">
           暂无模板，请创建后提交业务确认。
         </p>

@@ -1,14 +1,14 @@
 import csv
 import io
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, timedelta
 from html import escape
 from types import SimpleNamespace
 from typing import Literal
 
 from fastapi import Header, Query, Request
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from . import ai_service, auth, finance, metrics, reports
 from . import services as svc
@@ -24,9 +24,9 @@ from .evaluation_schemas import (
     SnapshotInput,
 )
 from .llm_service import LLMService
-from .models import Credential, Project
+from .models import Credential, Project, now
 from .schemas import VerifyInput
-from .workflow_models import Notification
+from .workflow_models import Notification, Task
 from .workflow_routes import scoped
 
 
@@ -73,6 +73,81 @@ def collection(db, principal, as_of):
 
 
 def register(app, Db, ok):
+    @app.get("/api/v1/metrics/dashboard")
+    def dashboard(request: Request, db: Db, as_of: date = Query(..., ge=date(2, 1, 1))):
+        """Read-only dashboard; all classifications reuse trial_v1 and existing project scopes."""
+        principal = request.state.principal
+        current = collection(db, principal, as_of)
+        projects = list(
+            db.scalars(
+                select(Project)
+                .where(Project.id.in_(auth.visible_projects(principal)))
+                .order_by(Project.project_code)
+            )
+        )
+        months = []
+        end = as_of.replace(day=1) - timedelta(days=1)
+        for _ in range(6):
+            start = end.replace(day=1)
+            values = Counter()
+            for project in projects:
+                if not project.current_plan_version_id:
+                    continue
+                evidence = metrics.calculate(db, project, end)["evidence"]
+                for row in evidence:
+                    if start.isoformat() <= row["planned_date"] <= end.isoformat():
+                        values[row["category"]] += 1
+            months.append({"month": start.strftime("%Y-%m"), **metrics.totals(values)})
+            end = start - timedelta(days=1)
+        unfinished = select(Task).where(
+            Task.project_id.in_(auth.visible_projects(principal)),
+            Task.status.not_in(("verified_done", "cancelled")),
+        )
+        task_count = db.scalar(select(func.count()).select_from(unfinished.subquery()))
+        upcoming = list(db.scalars(unfinished.order_by(Task.due_date, Task.id).limit(3)))
+        lookup = {p["project_id"]: p for p in current["projects"]}
+        rows = []
+        for project in projects[:5]:
+            metric = lookup.get(project.id)
+            pending = (
+                next(
+                    (
+                        r
+                        for r in metric["evidence"]
+                        if r["category"] not in ("excluded", "on_time_completed", "late_completed")
+                    ),
+                    None,
+                )
+                if metric
+                else None
+            )
+            rows.append(
+                {
+                    **svc.project_detail(db, project),
+                    "counts": metric["counts"] if metric else None,
+                    "next_milestone": (
+                        {k: pending[k] for k in ("milestone_name", "planned_date", "category")}
+                        if pending
+                        else None
+                    ),
+                }
+            )
+        return ok(
+            request,
+            {
+                "as_of_date": as_of.isoformat(),
+                "computed_at": now().isoformat(),
+                "formula": metrics.FORMULA,
+                "trend_basis": "最近6个完整自然月，按计划到期月份分组；以当前生效计划及当前已核实事实复算各月末，不代表当时系统知情快照。",
+                "task_basis": "当前未完成执行任务按截止日排序；不是历史待办快照。",
+                "months": list(reversed(months)),
+                "counts": current["counts"],
+                "pending_tasks": task_count,
+                "upcoming_tasks": [svc.record(t) for t in upcoming],
+                "projects": rows,
+            },
+        )
+
     @app.get("/api/v1/ai/config")
     def ai_config(request: Request, db: Db):
         return ok(request, LLMService.describe(db))

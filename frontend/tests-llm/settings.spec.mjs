@@ -1,5 +1,7 @@
 import {test,expect} from '@playwright/test';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import fs from 'node:fs';
 const key='browser-http-double-'+crypto.randomBytes(24).toString('hex');
 async function login(page,username='accept-editor'){
  await page.goto('/settings/llm');await page.getByLabel('账号',{exact:true}).fill(username);await page.getByLabel('密码',{exact:true}).fill(process.env.ACCEPTANCE_PASSWORD);await page.getByRole('button',{name:'登录',exact:true}).click();await expect(page.getByRole('heading',{name:'系统设置',exact:true})).toBeVisible();
@@ -52,4 +54,29 @@ test(`automatic verification ${action} stops queued tests and preserves complete
 }
 test('non administrator cannot see navigation or access settings APIs',async({page})=>{
  await login(page,'accept-reviewer');await expect(page.getByRole('link',{name:'系统设置',exact:true})).toHaveCount(0);await expect(page.getByText('仅系统管理员可访问大模型配置，请联系管理员。')).toBeVisible();expect((await page.request.get('/api/v1/settings/llm')).status()).toBe(403);
+});
+
+test('settings dropdowns and credential dialogs stay usable at every desktop size',async({page})=>{
+ await login(page);
+ const configuration=(await (await page.request.get('/api/v1/settings/llm')).json()).data;
+ if(configuration.key_configured){await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'移除已保存 Key'}).click();const d=page.getByRole('dialog');await d.getByRole('checkbox').check();await d.getByRole('button',{name:'确认移除密钥'}).click();await expect(d).toHaveCount(0);}
+ const directory=path.resolve('../docs/figma-ui/after');fs.mkdirSync(directory,{recursive:true});
+ async function inViewport(locator){const r=await locator.boundingBox();const v=page.viewportSize();expect(r.x).toBeGreaterThanOrEqual(0);expect(r.y).toBeGreaterThanOrEqual(0);expect(r.x+r.width).toBeLessThanOrEqual(v.width+1);expect(r.y+r.height).toBeLessThanOrEqual(v.height+1);}
+ for(const width of [1440,1280,1024]){
+  await page.setViewportSize({width,height:900});
+  const trigger=page.locator('.llm-select-trigger');
+  await trigger.click();let options=page.locator('#default-model-options');await expect(options).toBeVisible();await inViewport(options);
+  await page.screenshot({path:path.join(directory,`llm-default-dropdown-${width}.png`)});
+  await page.getByRole('heading',{name:'系统设置',exact:true}).click();await expect(options).toHaveCount(0);
+  await trigger.click();await expect(options).toBeVisible();await page.keyboard.press('Escape');await expect(options).toHaveCount(0);await expect(trigger).toBeFocused();
+  await trigger.click();await trigger.click();await expect(options).toHaveCount(0);
+  await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();let d=page.getByRole('dialog');await inViewport(d);
+  const input=d.getByLabel('新的 API Key *');await expect(input).toHaveValue('');await input.fill('ui-credential-dialog-synthetic-value');
+  await d.getByRole('button',{name:'显示',exact:true}).click();await expect(input).toHaveAttribute('type','text');await d.getByRole('button',{name:'隐藏',exact:true}).click();await expect(input).toHaveAttribute('type','password');
+  await page.screenshot({path:path.join(directory,`llm-key-dialog-${width}.png`)});
+  await d.getByRole('button',{name:'取消',exact:true}).click();await expect(d).toHaveCount(0);
+  await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();d=page.getByRole('dialog');await expect(d.getByLabel('新的 API Key *')).toHaveValue('');await page.keyboard.press('Escape');await expect(d).toHaveCount(0);
+  await page.getByRole('button',{name:'＋ 手动添加模型',exact:true}).click();d=page.getByRole('dialog');await inViewport(d);await page.screenshot({path:path.join(directory,`llm-manual-dialog-${width}.png`)});await d.getByRole('button',{name:'取消',exact:true}).click();
+  await page.getByRole('button',{name:'测试连接',exact:true}).click();d=page.getByRole('dialog');await expect(d).toContainText('未配置 API Key');await inViewport(d);await page.screenshot({path:path.join(directory,`llm-result-dialog-${width}.png`)});await d.getByRole('button',{name:'关闭结果',exact:true}).click();
+ }
 });

@@ -1,4 +1,6 @@
 import {test,expect} from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 
 async function login(page,username='accept-editor'){
  await page.goto('/actions');
@@ -99,6 +101,9 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await page.getByRole('button',{name:'执行任务',exact:true}).click();
  await page.getByRole('button',{name:'处理任务'}).first().click();
  d=page.getByRole('dialog');
+ fs.mkdirSync(path.resolve('../docs/figma-ui/after'),{recursive:true});
+ for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:900});const rect=await d.boundingBox();expect(rect.width).toBe(600);expect(rect.x+rect.width).toBe(width);expect(rect.height).toBe(900);await page.screenshot({path:path.resolve(`../docs/figma-ui/after/task-drawer-${width}.png`)});}
+ await page.setViewportSize({width:1440,height:1000});
  await d.getByLabel('分派执行人 *').selectOption({label:'验收编制人员'});
  await d.getByRole('button',{name:'保存任务分派'}).click();
  await expect(d).toContainText('待处理');

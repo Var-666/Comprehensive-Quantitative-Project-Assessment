@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, json } from "../api";
 import { useAuth } from "../store";
 import {
@@ -16,6 +16,7 @@ import Modal from "../components/Modal.vue";
 import Icon from "../components/Icon.vue";
 import MetricEvidence from "../components/MetricEvidence.vue";
 const router = useRouter();
+const route = useRoute();
 const auth = useAuth(),
   asOf = ref(businessToday()),
   loadedAsOf = ref(""),
@@ -151,7 +152,13 @@ async function prepareReport() {
     busy.value = false;
   }
 }
-onMounted(load);
+onMounted(async () => {
+  await load();
+  const project = data.value?.projects.find(
+    (p) => p.project_id === route.query.project,
+  );
+  if (project) await choose(project);
+});
 </script>
 <template>
   <div class="page-title">
@@ -166,6 +173,10 @@ onMounted(load);
       <p>以计划版本和核实事实为依据 · 试算指标，不生成综合考核得分</p>
     </div>
     <div class="actions">
+      <div v-if="!selected" class="metric-date-controls">
+        <label>业务统计截止日<input v-model="asOf" type="date" /></label>
+        <button :disabled="busy || !asOf" @click="load">计算评价</button>
+      </div>
       <button v-if="selected" @click="selected = undefined">返回项目评价</button
       ><a
         v-else
@@ -186,12 +197,7 @@ onMounted(load);
     {{ error }} <button @click="load">重新加载</button>
   </p>
   <p v-if="success" class="success" role="status">{{ success }}</p>
-  <div v-if="!selected" class="card filters">
-    <label>业务统计截止日<input v-model="asOf" type="date" /></label
-    ><button :disabled="busy || !asOf" @click="load">计算评价</button
-    ><span class="muted">汇总按节点数量计算，项目百分比不直接取平均。</span>
-  </div>
-  <div v-else class="card filters">
+  <div v-if="selected" class="card filters">
     <span class="badge">{{ selected.plan_version_label }}</span
     ><span
       >截止 {{ selected.as_of_date }} ·
@@ -257,7 +263,8 @@ onMounted(load);
             /><strong>{{ item.value }}</strong>
           </div></template
         ><template v-else
-          ><div
+          ><p class="muted">完成事实核实覆盖率 · 按类型分组，完整列表可滚动</p>
+          <div
             v-for="g in data?.groups"
             :key="g.node_type_code"
             class="metric-bar-row"
@@ -417,6 +424,7 @@ onMounted(load);
   <Modal
     v-if="formula && counts"
     title="评价口径说明"
+    class="metric-formula-drawer"
     drawer
     @close="formula = false"
     ><div class="notice">用户已确认试算基线 · trial_v1 · 非综合绩效评分</div>

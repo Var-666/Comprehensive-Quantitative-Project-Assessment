@@ -1,0 +1,50 @@
+[
+  {
+    "name": "overview",
+    "visible": 0,
+    "expected": 0,
+    "exercised": 0
+  },
+  {
+    "name": "projects",
+    "visible": 1,
+    "expected": 1,
+    "exercised": 1
+  },
+  {
+    "name": "milestones",
+    "visible": 4,
+    "expected": 4,
+    "exercised": 4
+  },
+  {
+    "name": "actions",
+    "visible": 2,
+    "expected": 2,
+    "exercised": 2
+  },
+  {
+    "name": "tasks",
+    "visible": 2,
+    "expected": 2,
+    "exercised": 2
+  },
+  {
+    "name": "metrics",
+    "visible": 0,
+    "expected": 0,
+    "exercised": 0
+  },
+  {
+    "name": "analysis",
+    "visible": 2,
+    "expected": 2,
+    "exercised": 2
+  },
+  {
+    "name": "settings",
+    "visible": 2,
+    "expected": 2,
+    "exercised": 2
+  }
+]

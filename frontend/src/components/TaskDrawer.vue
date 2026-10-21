@@ -100,20 +100,31 @@ onMounted(async () => {
 });
 </script>
 <template>
-  <Modal title="任务执行反馈" drawer :busy="busy" @close="emit('close')">
-    <p class="muted">{{ detail.title }} · 截止{{ detail.due_date }}</p>
-    <div class="tabs">
-      <button :class="{ primary: tab === 'details' }" @click="tab = 'details'">
-        任务详情</button
-      ><button
-        :class="{ primary: tab === 'feedback' }"
-        @click="tab = 'feedback'"
-      >
-        执行反馈</button
-      ><button :class="{ primary: tab === 'audit' }" @click="tab = 'audit'">
-        操作记录
-      </button>
-    </div>
+  <Modal
+    class="task-drawer"
+    title="任务执行反馈"
+    :subtitle="task.title"
+    drawer
+    :busy="busy"
+    @close="emit('close')"
+  >
+    <template #navigation>
+      <div class="drawer-tabs">
+        <button
+          :class="{ primary: tab === 'details' }"
+          @click="tab = 'details'"
+        >
+          任务详情</button
+        ><button
+          :class="{ primary: tab === 'feedback' }"
+          @click="tab = 'feedback'"
+        >
+          执行反馈</button
+        ><button :class="{ primary: tab === 'audit' }" @click="tab = 'audit'">
+          操作记录
+        </button>
+      </div>
+    </template>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="success" class="success" role="status">{{ success }}</p>
     <p v-if="detail.requires_review" class="notice">

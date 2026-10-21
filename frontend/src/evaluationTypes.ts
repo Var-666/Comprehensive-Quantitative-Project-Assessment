@@ -1,3 +1,26 @@
+import type { Project } from "./types";
+import type { TaskRecord } from "./workflowTypes";
+
+export interface Dashboard {
+  as_of_date: string;
+  computed_at: string;
+  trend_basis: string;
+  task_basis: string;
+  formula: Metric["formula"];
+  months: (Counts & { month: string })[];
+  counts: Counts;
+  pending_tasks: number;
+  upcoming_tasks: TaskRecord[];
+  projects: (Project & {
+    counts: Counts | null;
+    next_milestone: {
+      milestone_name: string;
+      planned_date: string;
+      category: string;
+    } | null;
+  })[];
+}
+
 export const categoryLabels: Record<string, string> = {
   on_time_completed: "按期完成",
   late_completed: "延期完成",
@@ -11,6 +34,7 @@ export interface Counts {
   total_nodes: number;
   on_time_completed: number;
   late_completed: number;
+  verified_completed: number;
   pending_verification: number;
   confirmed_overdue_unfinished: number;
   not_due: number;

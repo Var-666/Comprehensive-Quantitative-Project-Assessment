@@ -15,6 +15,18 @@ const detail = ref<Milestone>(props.node),
   success = ref(""),
   comment = ref("");
 const cancelReason = ref("");
+const section = ref("info");
+function jump(event: Event, value: string) {
+  const dialog = (event.currentTarget as HTMLElement).closest("dialog");
+  const body = dialog?.querySelector<HTMLElement>(".modal-body");
+  const target = dialog?.querySelector<HTMLElement>(
+    `[data-node-section="${value}"]`,
+  );
+  if (!body || !target) return;
+  section.value = value;
+  body.scrollTop +=
+    target.getBoundingClientRect().top - body.getBoundingClientRect().top - 20;
+}
 async function cancelNode() {
   busy.value = true;
   error.value = "";
@@ -101,13 +113,31 @@ onMounted(load);
 <template>
   <Modal
     :title="`${detail.milestone_code} · 节点详情`"
+    :subtitle="detail.milestone_name"
     drawer
     :busy="busy"
     @close="emit('close')"
   >
+    <template #navigation
+      ><nav class="drawer-tabs" aria-label="节点详情区段">
+        <button
+          v-for="(title, key) in {
+            info: '节点信息',
+            actions: '标准动作',
+            records: '执行记录',
+            history: '变更历史',
+          }"
+          :key="key"
+          :class="{ active: section === key }"
+          @click="jump($event, key)"
+        >
+          {{ title }}
+        </button>
+      </nav></template
+    >
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="success" class="success" role="status">{{ success }}</p>
-    <section class="form-section">
+    <section class="form-section" data-node-section="info">
       <h3>
         {{ detail.milestone_name }}
         <StatusBadge :value="detail.verification_status" />
@@ -133,7 +163,9 @@ onMounted(load);
         </div>
       </dl>
     </section>
-    <NodeActions :key="detail.plan_item.id" :node="detail" />
+    <div data-node-section="actions">
+      <NodeActions :key="detail.plan_item.id" :node="detail" />
+    </div>
     <section v-if="auth.can(detail.project_id)" class="form-section">
       <details v-if="detail.lifecycle_status === 'active'">
         <summary>取消节点</summary>
@@ -187,7 +219,7 @@ onMounted(load);
         <button class="primary" :disabled="busy">提交实际记录</button>
       </form>
     </section>
-    <section class="form-section">
+    <section class="form-section" data-node-section="records">
       <h3>实际记录与独立核实</h3>
       <p class="notice warning">
         仅本项目审核人员可以核实；提交人不能核实自己的记录。
@@ -252,7 +284,7 @@ onMounted(load);
       </div>
       <p v-if="!detail.actual_records.length" class="empty">尚无实际记录</p>
     </section>
-    <section class="form-section">
+    <section class="form-section" data-node-section="history">
       <h3>计划历史快照</h3>
       <div class="table-wrap">
         <table>

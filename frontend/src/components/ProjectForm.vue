@@ -58,6 +58,11 @@ async function save() {
 <template>
   <Modal
     :title="project ? '编辑项目' : '新建项目'"
+    :subtitle="
+      project
+        ? '修改项目基本信息，计划版本与实际事实独立管理'
+        : '建立项目台账，后续可录入节点与标准动作'
+    "
     :busy="busy"
     @close="emit('close')"
   >

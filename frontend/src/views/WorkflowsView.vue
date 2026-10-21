@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRoute } from "vue-router";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useAuth, useCatalog } from "../store";
 import type { Page, Project } from "../types";
@@ -13,13 +14,14 @@ import { label } from "../workflowTypes";
 import Modal from "../components/Modal.vue";
 import Icon from "../components/Icon.vue";
 import TaskDrawer from "../components/TaskDrawer.vue";
+const route = useRoute();
 const auth = useAuth(),
   catalog = useCatalog(),
-  tab = ref("notices"),
+  tab = ref(route.query.tab === "tasks" ? "tasks" : "notices"),
   busy = ref(false),
   error = ref(""),
   success = ref(""),
-  projectId = ref(""),
+  projectId = ref(String(route.query.project || "")),
   status = ref(""),
   mine = ref(false),
   projects = ref<Project[]>([]),
@@ -215,6 +217,11 @@ onMounted(async () => {
     }
     scan.project = projects.value[0]?.id || "";
     await load();
+    if (tab.value === "tasks" && route.query.task) {
+      showTask.value = await api<TaskRecord>(
+        `/tasks/${encodeURIComponent(String(route.query.task))}`,
+      );
+    }
   } catch (e) {
     error.value = errorMessage(e);
   }
@@ -230,68 +237,76 @@ onMounted(async () => {
       <Icon name="imgVectorPlus" />手动创建提醒
     </button>
   </div>
-  <div class="tabs">
-    <button
-      :class="{ primary: tab === 'notices' }"
-      @click="switchTab('notices')"
+  <div class="workbench-toolbar">
+    <div class="tabs">
+      <button
+        :class="{ primary: tab === 'notices' }"
+        @click="switchTab('notices')"
+      >
+        通知队列</button
+      ><button
+        :class="{ primary: tab === 'tasks' }"
+        @click="switchTab('tasks')"
+      >
+        执行任务</button
+      ><button
+        :class="{ primary: tab === 'inbox' }"
+        @click="switchTab('inbox')"
+      >
+        站内收件箱</button
+      ><button :class="{ primary: tab === 'scan' }" @click="switchTab('scan')">
+        提醒扫描
+      </button>
+    </div>
+    <p v-if="error" class="error" role="alert">
+      {{ error }} <button @click="load()">重试</button>
+    </p>
+    <p v-if="success" class="success" role="status">{{ success }}</p>
+    <form
+      v-if="['notices', 'tasks'].includes(tab)"
+      class="filters compact"
+      @submit.prevent="load()"
     >
-      通知队列</button
-    ><button :class="{ primary: tab === 'tasks' }" @click="switchTab('tasks')">
-      执行任务</button
-    ><button :class="{ primary: tab === 'inbox' }" @click="switchTab('inbox')">
-      站内收件箱</button
-    ><button :class="{ primary: tab === 'scan' }" @click="switchTab('scan')">
-      提醒扫描
-    </button>
+      <label
+        >筛选项目<select v-model="projectId">
+          <option value="">全部授权项目</option>
+          <option v-for="p in projects" :key="p.id" :value="p.id">
+            {{ p.project_code }} · {{ p.project_name }}
+          </option>
+        </select></label
+      ><label
+        >工作状态<select v-model="status">
+          <option value="">全部</option>
+          <option
+            v-for="s in tab === 'notices'
+              ? [
+                  'draft',
+                  'pending_review',
+                  'returned',
+                  'approved_pending_send',
+                  'sent',
+                  'invalidated',
+                ]
+              : [
+                  'unassigned',
+                  'todo',
+                  'in_progress',
+                  'submitted',
+                  'returned',
+                  'verified_done',
+                  'cancelled',
+                ]"
+            :key="s"
+            :value="s"
+          >
+            {{ label(s) }}
+          </option>
+        </select></label
+      ><label v-if="tab === 'tasks'" class="checkbox-line"
+        ><input v-model="mine" type="checkbox" />仅看分派给我</label
+      ><button :disabled="busy">查询工作</button>
+    </form>
   </div>
-  <p v-if="error" class="error" role="alert">
-    {{ error }} <button @click="load()">重试</button>
-  </p>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
-  <form
-    v-if="['notices', 'tasks'].includes(tab)"
-    class="card filters"
-    @submit.prevent="load()"
-  >
-    <label
-      >筛选项目<select v-model="projectId">
-        <option value="">全部授权项目</option>
-        <option v-for="p in projects" :key="p.id" :value="p.id">
-          {{ p.project_code }} · {{ p.project_name }}
-        </option>
-      </select></label
-    ><label
-      >工作状态<select v-model="status">
-        <option value="">全部</option>
-        <option
-          v-for="s in tab === 'notices'
-            ? [
-                'draft',
-                'pending_review',
-                'returned',
-                'approved_pending_send',
-                'sent',
-                'invalidated',
-              ]
-            : [
-                'unassigned',
-                'todo',
-                'in_progress',
-                'submitted',
-                'returned',
-                'verified_done',
-                'cancelled',
-              ]"
-          :key="s"
-          :value="s"
-        >
-          {{ label(s) }}
-        </option>
-      </select></label
-    ><label v-if="tab === 'tasks'" class="checkbox-line"
-      ><input v-model="mine" type="checkbox" />仅看分派给我</label
-    ><button :disabled="busy">查询工作</button>
-  </form>
   <p v-if="busy" class="muted" role="status">正在处理…</p>
   <div v-if="tab === 'notices'" class="workflow-split notice-split">
     <section class="card queue">

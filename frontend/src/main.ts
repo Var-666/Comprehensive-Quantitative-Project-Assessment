@@ -11,6 +11,7 @@ import AnalysisView from "./views/AnalysisView.vue";
 import ActionsView from "./views/ActionsView.vue";
 import WorkflowsView from "./views/WorkflowsView.vue";
 import LLMSettingsView from "./views/LLMSettingsView.vue";
+import "@fontsource-variable/noto-sans-sc";
 import "./style.css";
 
 const router = createRouter({

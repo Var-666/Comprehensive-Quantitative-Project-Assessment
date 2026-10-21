@@ -1,0 +1,985 @@
+{
+  "audited_on": "2026-10-21",
+  "file_key": "lpwYfFvR1fojx3IrctRdYl",
+  "figma_url": "https://www.figma.com/design/lpwYfFvR1fojx3IrctRdYl",
+  "page": {
+    "node_id": "0:1",
+    "name": "第一期 · 系统原型"
+  },
+  "frames": [
+    {
+      "node_id": "2:30",
+      "name": "01 / 项目总览",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "2:73",
+      "name": "02 / 项目管理",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "2:116",
+      "name": "03 / 节点管理 · 里程碑时间轴",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "2:159",
+      "name": "04 / 标准动作",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "2:202",
+      "name": "05 / 提醒与待办",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "2:245",
+      "name": "06 / 量化评估",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "2:288",
+      "name": "07 / AI 智能分析",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "25:487",
+      "name": "08 / 节点管理 · 节点详情抽屉",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "25:724",
+      "name": "09 / 节点管理 · 新增节点弹窗",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "25:961",
+      "name": "10 / 节点管理 · 关联标准动作",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "34:835",
+      "name": "11 / 新建节点 · 选择动作模板",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "37:951",
+      "name": "12 / 提醒与待办 · 任务执行反馈",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "37:1060",
+      "name": "13 / 提醒与待办 · 通知审核确认",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "37:1169",
+      "name": "14 / 提醒与待办 · 审核通过待发送",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "37:1278",
+      "name": "15 / 提醒与待办 · 反馈已提交待核实",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "45:1171",
+      "name": "16 / 量化评估 · P-H028项目明细",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "45:1350",
+      "name": "17 / 量化评估 · 指标口径说明",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "45:1486",
+      "name": "18 / 量化评估 · 异常节点追溯",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "51:1334",
+      "name": "19 / 量化评估 · 待核对节点追溯",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "56:1393",
+      "name": "20 / 项目管理 · 新建项目",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "56:1566",
+      "name": "21 / 项目管理 · 项目详情 P-H028",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "56:1782",
+      "name": "22 / 项目管理 · 编辑项目",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "56:1955",
+      "name": "23 / 项目管理 · Excel导入与字段映射",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "56:2128",
+      "name": "24 / 项目管理 · Excel导入数据校验",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "62:1768",
+      "name": "25 / 项目管理 · 新建项目结果演示",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "62:1944",
+      "name": "26 / 项目管理 · Excel导入结果演示",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "67:1936",
+      "name": "27 / 项目管理 · 筛选条件面板",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "67:2110",
+      "name": "28 / 项目管理 · 进行中项目筛选结果",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "77:2110",
+      "name": "29 / 系统设置 · 大模型配置",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "77:2211",
+      "name": "30 / 系统设置 · 添加自定义模型",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "77:2312",
+      "name": "31 / 系统设置 · 连接测试状态（演示）",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "77:2413",
+      "name": "32 / 系统设置 · 模型下拉与选择",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    },
+    {
+      "node_id": "79:2717",
+      "name": "33 / 系统设置 · API Key 安全配置",
+      "width": 1440,
+      "height": 900,
+      "design_context_read": true
+    }
+  ],
+  "symbols": [
+    {
+      "node_id": "2:18",
+      "name": "Nav Item / Default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "2:21",
+      "name": "Nav Item / Active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "2:24",
+      "name": "Metric Card / Default",
+      "width": 267,
+      "height": 126
+    },
+    {
+      "node_id": "2:28",
+      "name": "Status Badge / Neutral",
+      "width": 76,
+      "height": 26
+    },
+    {
+      "node_id": "8:165",
+      "name": "Milestone / Step Card",
+      "width": 210,
+      "height": 127
+    },
+    {
+      "node_id": "13:164",
+      "name": "Brand / 项目智能管控 / Logo Lockup",
+      "width": 194,
+      "height": 45
+    },
+    {
+      "node_id": "13:176",
+      "name": "Nav / 项目总览 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:183",
+      "name": "Nav / 项目总览 / active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:190",
+      "name": "Nav / 项目管理 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:195",
+      "name": "Nav / 项目管理 / active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:200",
+      "name": "Nav / 节点管理 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:207",
+      "name": "Nav / 节点管理 / active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:214",
+      "name": "Nav / 标准动作 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:219",
+      "name": "Nav / 标准动作 / active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:224",
+      "name": "Nav / 提醒与待办 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:229",
+      "name": "Nav / 提醒与待办 / active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:234",
+      "name": "Nav / 量化评估 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:241",
+      "name": "Nav / 量化评估 / active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:248",
+      "name": "Nav / AI 智能分析 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "13:253",
+      "name": "Nav / AI 智能分析 / active",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "20:381",
+      "name": "Icon / plus / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:384",
+      "name": "Icon / plus / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:387",
+      "name": "Icon / plus / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:390",
+      "name": "Icon / search / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:394",
+      "name": "Icon / search / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:398",
+      "name": "Icon / search / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:402",
+      "name": "Icon / filter / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:405",
+      "name": "Icon / filter / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:408",
+      "name": "Icon / filter / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:411",
+      "name": "Icon / rotate-ccw / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:415",
+      "name": "Icon / rotate-ccw / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:419",
+      "name": "Icon / rotate-ccw / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:423",
+      "name": "Icon / upload / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:426",
+      "name": "Icon / upload / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:429",
+      "name": "Icon / upload / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:432",
+      "name": "Icon / download / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:435",
+      "name": "Icon / download / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:438",
+      "name": "Icon / download / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:441",
+      "name": "Icon / pencil / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:444",
+      "name": "Icon / pencil / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:447",
+      "name": "Icon / pencil / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:450",
+      "name": "Icon / bell / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:453",
+      "name": "Icon / bell / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:456",
+      "name": "Icon / bell / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:459",
+      "name": "Icon / eye / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:463",
+      "name": "Icon / eye / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:467",
+      "name": "Icon / eye / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:471",
+      "name": "Icon / history / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:474",
+      "name": "Icon / history / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:477",
+      "name": "Icon / history / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:480",
+      "name": "Icon / calendar / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:484",
+      "name": "Icon / calendar / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:488",
+      "name": "Icon / calendar / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:492",
+      "name": "Icon / file-text / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:495",
+      "name": "Icon / file-text / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:498",
+      "name": "Icon / file-text / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:501",
+      "name": "Icon / check / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:504",
+      "name": "Icon / check / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:507",
+      "name": "Icon / check / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:510",
+      "name": "Icon / alert-triangle / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:514",
+      "name": "Icon / alert-triangle / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:518",
+      "name": "Icon / alert-triangle / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:522",
+      "name": "Icon / clock / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:526",
+      "name": "Icon / clock / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:530",
+      "name": "Icon / clock / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:534",
+      "name": "Icon / send / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:537",
+      "name": "Icon / send / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:540",
+      "name": "Icon / send / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:543",
+      "name": "Icon / table / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:547",
+      "name": "Icon / table / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:551",
+      "name": "Icon / table / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:555",
+      "name": "Icon / git-branch / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:561",
+      "name": "Icon / git-branch / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:567",
+      "name": "Icon / git-branch / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:573",
+      "name": "Icon / sparkles / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:576",
+      "name": "Icon / sparkles / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:579",
+      "name": "Icon / sparkles / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:582",
+      "name": "Icon / save / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:585",
+      "name": "Icon / save / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:588",
+      "name": "Icon / save / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:591",
+      "name": "Icon / undo-2 / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:594",
+      "name": "Icon / undo-2 / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:597",
+      "name": "Icon / undo-2 / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:600",
+      "name": "Icon / folder-open / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:603",
+      "name": "Icon / folder-open / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:606",
+      "name": "Icon / folder-open / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:609",
+      "name": "Icon / chevron-down / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:612",
+      "name": "Icon / chevron-down / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:615",
+      "name": "Icon / chevron-down / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:618",
+      "name": "Icon / info / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:622",
+      "name": "Icon / info / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:626",
+      "name": "Icon / info / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:630",
+      "name": "Icon / copy / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:634",
+      "name": "Icon / copy / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:638",
+      "name": "Icon / copy / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:642",
+      "name": "Icon / more-horizontal / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:647",
+      "name": "Icon / more-horizontal / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:652",
+      "name": "Icon / more-horizontal / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:657",
+      "name": "Icon / refresh-cw / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:661",
+      "name": "Icon / refresh-cw / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:665",
+      "name": "Icon / refresh-cw / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:669",
+      "name": "Icon / file-up / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:672",
+      "name": "Icon / file-up / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:675",
+      "name": "Icon / file-up / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:678",
+      "name": "Icon / file-down / neutral",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:681",
+      "name": "Icon / file-down / inverse",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:684",
+      "name": "Icon / file-down / accent",
+      "width": 18,
+      "height": 18
+    },
+    {
+      "node_id": "20:687",
+      "name": "Action Button / primary / leading-icon",
+      "width": 150,
+      "height": 36
+    },
+    {
+      "node_id": "20:692",
+      "name": "Action Button / outline / leading-icon",
+      "width": 150,
+      "height": 36
+    },
+    {
+      "node_id": "20:697",
+      "name": "Icon Button / ghost / 32",
+      "width": 32,
+      "height": 32
+    },
+    {
+      "node_id": "77:2094",
+      "name": "Nav / 系统设置 / default",
+      "width": 206,
+      "height": 42
+    },
+    {
+      "node_id": "77:2102",
+      "name": "Nav / 系统设置 / active",
+      "width": 206,
+      "height": 42
+    }
+  ],
+  "colors": {
+    "ink": "#172338",
+    "muted": "#6a788d",
+    "white": "#ffffff",
+    "line": "#e3e9f1",
+    "blue": "#3269d2",
+    "light": "#ecf3ff",
+    "amber": "#c17822",
+    "amberlight": "#fff5df",
+    "pale": "#f2f5f9",
+    "redlight": "#fff0f0",
+    "bg": "#f6f8fb"
+  },
+  "layout": {
+    "sidebar_width": 236,
+    "header_height": 68,
+    "page_padding": 28,
+    "node_page_top_padding": 22,
+    "sidebar_nav_height": 42,
+    "sidebar_nav_gap": 4,
+    "main_card_radius": 12,
+    "button_height": 36,
+    "input_height": 40,
+    "overview_kpi_height": 127,
+    "overview_panel_ratio": [
+      714,
+      416
+    ],
+    "overview_panel_height": 273,
+    "template_panel_ratio": [
+      352,
+      778
+    ],
+    "notice_panel_ratio": [
+      500,
+      632
+    ],
+    "metric_panel_height": 276,
+    "report_panel_ratio": [
+      366,
+      762
+    ],
+    "node_drawer_width": 520,
+    "task_drawer_width": 600,
+    "project_modal_width": 660,
+    "node_modal_width": 690,
+    "llm_modal_widths": {
+      "key": 635,
+      "manual": 700,
+      "result": 650
+    }
+  },
+  "typography": {
+    "family": "Noto Sans SC",
+    "heading_size": 23,
+    "section_title_size": 15,
+    "body_size": 12,
+    "secondary_size": 11,
+    "font_weights": [
+      400,
+      500,
+      700
+    ]
+  },
+  "code_connect": "not_available_plan_seat_restriction",
+  "coverage": {
+    "frames_read": 33,
+    "frames_total": 33
+  }
+}

@@ -56,7 +56,9 @@ async function save() {
 </script>
 <template>
   <Modal
+    class="node-form-modal"
     :title="node ? '编辑节点计划草稿' : '新增项目节点'"
+    subtitle="设置节点基本属性；草稿计划需独立批准后生效"
     :busy="busy"
     @close="emit('close')"
   >
@@ -140,7 +142,7 @@ async function save() {
         </label>
       </section>
       <p class="notice warning">
-        内部计划调整不自动修改合同义务。实际完成日期须在节点详情中单独提交与核实。标准动作与提醒将在第二阶段开放。
+        内部计划调整不自动修改合同义务。实际完成日期须在节点详情中单独提交与核实；标准动作与提醒通过已批准的模板和规则配置。
       </p>
     </form>
     <template #footer

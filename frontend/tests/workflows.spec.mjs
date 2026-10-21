@@ -36,6 +36,13 @@ test('project and node edits persist; plan revision preserves the original sched
   const nodesUrl=page.url();
   await page.getByRole('button', { name: '添加节点', exact: true }).first().click();
   dialog = page.getByRole('dialog');
+  fs.mkdirSync(path.resolve('../docs/figma-ui/after'),{recursive:true});
+  for(const width of [1440,1280,1024]) {
+    await page.setViewportSize({width,height:900});
+    const rect=await dialog.boundingBox();expect(rect.width).toBe(690);expect(rect.y).toBeGreaterThanOrEqual(0);expect(rect.y+rect.height).toBeLessThanOrEqual(901);
+    await page.screenshot({path:path.resolve(`../docs/figma-ui/after/node-form-${width}.png`)});
+  }
+  await page.setViewportSize({width:1440,height:1000});
   await dialog.getByLabel('节点编号 *', { exact: true }).fill('E2E-N001');
   await dialog.getByLabel('节点名称 *', { exact: true }).fill('浏览器测试节点');
   await dialog.getByLabel('节点类型 *').selectOption('设计资料');

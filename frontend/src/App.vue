@@ -17,14 +17,51 @@ onMounted(async () => {
 onUnmounted(() => window.removeEventListener("session-expired", expired));
 const route = useRoute();
 const nav = [
-  { path: "/", title: "项目总览", icon: "imgIconVector5" },
-  { path: "/projects", title: "项目管理", icon: "imgIconVector4" },
-  { path: "/milestones", title: "节点管理", icon: "imgIconVector3" },
-  { path: "/actions", title: "标准动作", icon: "imgIconVector2" },
-  { path: "/tasks", title: "提醒与待办", icon: "imgIconVector1" },
-  { path: "/metrics", title: "量化评估", icon: "imgIconVector" },
-  { path: "/analysis", title: "AI 智能分析", icon: "imgIconAiVector" },
+  {
+    path: "/",
+    title: "项目总览",
+    icon: "imgIconVector5",
+    activeIcon: "nav-overview-active",
+  },
+  {
+    path: "/projects",
+    title: "项目管理",
+    icon: "nav-projects",
+    activeIcon: "imgIconVector4",
+  },
+  {
+    path: "/milestones",
+    title: "节点管理",
+    icon: "imgIconVector3",
+    activeIcon: "nav-milestones-active",
+  },
+  {
+    path: "/actions",
+    title: "标准动作",
+    icon: "imgIconVector2",
+    activeIcon: "nav-actions-active",
+  },
+  {
+    path: "/tasks",
+    title: "提醒与待办",
+    icon: "imgIconVector1",
+    activeIcon: "nav-tasks-active",
+  },
+  {
+    path: "/metrics",
+    title: "量化评估",
+    icon: "imgIconVector",
+    activeIcon: "nav-metrics-active",
+  },
+  {
+    path: "/analysis",
+    title: "AI 智能分析",
+    icon: "imgIconAiVector",
+    activeIcon: "nav-analysis-active",
+  },
 ];
+const isActive = (path: string) =>
+  path === "/" ? route.path === "/" : route.path.startsWith(path);
 </script>
 <template>
   <p v-if="!auth.ready" class="empty" role="status">正在验证登录状态…</p>
@@ -43,19 +80,20 @@ const nav = [
           v-for="item in nav"
           :key="item.path"
           :to="item.path"
-          :class="{
-            active:
-              item.path === '/'
-                ? route.path === '/'
-                : route.path.startsWith(item.path),
-          }"
-          ><Icon :name="item.icon" />{{ item.title }}</RouterLink
+          :class="{ active: isActive(item.path) }"
+          ><Icon :name="isActive(item.path) ? item.activeIcon : item.icon" />{{
+            item.title
+          }}</RouterLink
         >
         <RouterLink
           v-if="auth.user.is_system_admin"
           to="/settings/llm"
           :class="{ active: route.path.startsWith('/settings') }"
-          ><Icon name="settings" />系统设置</RouterLink
+          ><Icon
+            :name="
+              route.path.startsWith('/settings') ? 'settings' : 'nav-settings'
+            "
+          />系统设置</RouterLink
         >
       </nav>
       <div class="sidebar-foot">
@@ -77,7 +115,9 @@ const nav = [
           ><button class="text-button" @click="auth.logout()">退出登录</button>
         </div>
       </header>
-      <main><RouterView /></main>
+      <main :class="`workspace-${route.path.split('/')[1] || 'overview'}`">
+        <RouterView />
+      </main>
     </div>
   </template>
 </template>

@@ -365,8 +365,17 @@ def test_task_execution_and_independent_verification_do_not_complete_node(client
     assert data(client.get(url + "/audit-events"))
 
 
-def test_version_change_invalidates_drafts_preserves_sent_history_and_rebinds(client, factory):
+def test_version_change_invalidates_drafts_preserves_sent_history_and_rebinds(
+    client, factory, monkeypatch
+):
     """TC015: V3 never rewrites V2 notices, dates, actions or begun execution history."""
+    from datetime import datetime, timezone
+
+    from app import services
+
+    # This scenario activates the new plan before its trigger date. A wall-clock
+    # activation on 21 October would already scan it, making the later scan a replay.
+    monkeypatch.setattr(services, "now", lambda: datetime(2026, 10, 19, 4, tzinfo=timezone.utc))
     p, node, _, _, _ = setup_workflow(client, catch_up=1)
     data(scan(client, p))
     task = data(client.get("/api/v1/tasks"))["items"][0]

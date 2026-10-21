@@ -26,6 +26,20 @@ const auth = useAuth(),
   defaultOpen = ref(false),
   auditTab = ref("events"),
   auditRows = ref<Record<string, unknown>[]>([]);
+const defaultPicker = ref<HTMLElement>();
+function dismissDefault(event: PointerEvent) {
+  if (
+    event.target instanceof Node &&
+    !defaultPicker.value?.contains(event.target)
+  )
+    defaultOpen.value = false;
+}
+function escapeDefault(event: KeyboardEvent) {
+  if (event.key !== "Escape" || !defaultOpen.value) return;
+  event.preventDefault();
+  defaultOpen.value = false;
+  defaultPicker.value?.querySelector<HTMLButtonElement>("button")?.focus();
+}
 const autoTesting = ref(false),
   stopAutoTesting = ref(false),
   autoProgress = reactive({ completed: 0, total: 0, model: "" });
@@ -33,6 +47,8 @@ let pageActive = true;
 onBeforeUnmount(() => {
   pageActive = false;
   stopAutoTesting.value = true;
+  document.removeEventListener("pointerdown", dismissDefault);
+  document.removeEventListener("keydown", escapeDefault);
 });
 const form = reactive({
   service_name: "企业 MaaS 网关（自定义）",
@@ -363,6 +379,8 @@ async function showAudit(tab = "events") {
   });
 }
 onMounted(() => {
+  document.addEventListener("pointerdown", dismissDefault);
+  document.addEventListener("keydown", escapeDefault);
   if (canAdmin.value) void load(true);
   else loading.value = false;
 });
@@ -472,7 +490,7 @@ onMounted(() => {
           <span class="badge">{{ defaultModel ? "已选择" : "尚未选择" }}</span>
         </div>
         <label>系统默认模型</label>
-        <div class="llm-model-select">
+        <div ref="defaultPicker" class="llm-model-select">
           <button
             class="llm-select-trigger"
             :disabled="busy"

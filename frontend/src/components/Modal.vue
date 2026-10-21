@@ -35,6 +35,9 @@ onMounted(() => dialog.value?.showModal());
         ×
       </button>
     </div>
+    <div v-if="$slots.navigation" class="modal-navigation">
+      <slot name="navigation" />
+    </div>
     <div class="modal-body"><slot /></div>
     <div v-if="$slots.footer" class="modal-footer"><slot name="footer" /></div>
   </dialog>

@@ -1,4 +1,6 @@
 import {test,expect} from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 async function login(page,username='accept-editor'){
  await page.goto('/metrics');
  await page.getByLabel('账号',{exact:true}).fill(username);
@@ -26,10 +28,15 @@ test('trial metrics trace their evidence and frozen reports require an independe
  await expect(row).toContainText('93.3%');
  await expect(page.locator('.stat-grid')).toContainText('88.2%');
  await row.getByRole('button',{name:'评价明细'}).click();
+ fs.mkdirSync(path.resolve('../docs/figma-ui/after'),{recursive:true});
+ for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:900});await page.getByRole('button',{name:'查看口径',exact:true}).click();const formula=page.getByRole('dialog');expect((await formula.boundingBox()).width).toBe(620);await page.screenshot({path:path.resolve(`../docs/figma-ui/after/metric-formula-${width}.png`)});await page.keyboard.press('Escape');await expect(formula).toHaveCount(0);}
+ await page.setViewportSize({width:1440,height:1000});
  await page.getByLabel('评价分类').selectOption('late_completed');
  await page.getByRole('row').filter({hasText:'H028-N006'}).getByRole('button',{name:'证据追溯'}).click();
  let d=page.getByRole('dialog');
  await expect(d).toContainText('2026-10-12');await expect(d).toContainText('2026-10-15');await expect(d).toContainText('3 天');
+ for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:900});expect((await d.boundingBox()).width).toBe(640);await page.screenshot({path:path.resolve(`../docs/figma-ui/after/metric-evidence-${width}.png`)});}
+ await page.setViewportSize({width:1440,height:1000});
  await d.getByRole('button',{name:'关闭追溯',exact:true}).click();
  await page.getByRole('button',{name:'保存评价快照'}).click();
  await expect(page.getByRole('status')).toContainText('已保存评价快照');
@@ -50,7 +57,8 @@ test('trial metrics trace their evidence and frozen reports require an independe
  await expect(d).toHaveCount(0);await expect(page.locator('.report-preview')).toContainText('已批准');
  const download=page.waitForEvent('download');await page.getByRole('link',{name:'导出报告 HTML'}).click();await expect((await download).suggestedFilename()).toMatch(/^report-.*\.html$/);
  await page.screenshot({path:'test-results/phase3-report.png',fullPage:true});
- for(const width of [1280,1024]){await page.setViewportSize({width,height:900});await expect(page.locator('.report-preview')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);}
+ fs.mkdirSync(path.resolve('../docs/figma-ui/after'),{recursive:true});
+ for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:900});await expect(page.locator('.report-preview')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await page.screenshot({path:path.resolve(`../docs/figma-ui/after/approved-report-${width}.png`)});}
  expect(errors).toEqual([]);
 });
 
@@ -77,4 +85,6 @@ test('money needs extra authorization and actual amounts remain unknown until in
  await switchUser(page,'accept-reviewer');await page.goto('/analysis');await selectReportProject(page);await page.getByRole('button',{name:'收付款记录',exact:true}).click();
  await page.getByRole('button',{name:'独立财务核实',exact:true}).click();d=page.getByRole('dialog');await d.getByLabel('财务核实依据 *').fill('另一人员独立核对浏览器测试凭证');await d.getByRole('button',{name:'确认财务核实'}).click();await expect(d).toHaveCount(0);await expect(page.getByRole('row').filter({hasText:'FIN-BROWSER-ACTUAL'})).toContainText('verified');
  await page.screenshot({path:'test-results/phase3-finance.png',fullPage:true});
+ fs.mkdirSync(path.resolve('../docs/figma-ui/after'),{recursive:true});
+ for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:900});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);await page.screenshot({path:path.resolve(`../docs/figma-ui/after/finance-${width}.png`)});}
 });

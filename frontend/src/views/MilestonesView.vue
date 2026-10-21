@@ -12,6 +12,8 @@ import NodeDetail from "../components/NodeDetail.vue";
 import ImportDialog from "../components/ImportDialog.vue";
 import Modal from "../components/Modal.vue";
 import StatusBadge from "../components/StatusBadge.vue";
+import TimelineDot from "../components/TimelineDot.vue";
+import { businessToday, categoryLabels, type Metric } from "../evaluationTypes";
 const route = useRoute(),
   router = useRouter(),
   catalog = useCatalog();
@@ -48,6 +50,12 @@ const canEdit = computed(
     auth.can(projectId.value) &&
     project.value?.project_status !== "archived",
 );
+const metric = ref<Metric>(),
+  metricError = ref("");
+const nodeCategory = (node: Milestone) =>
+  metric.value?.evidence.find((row) => row.milestone_id === node.id)?.category;
+let projectRequest = 0,
+  nodeRequest = 0;
 async function loadOptions() {
   const items: Project[] = [];
   let page = 1;
@@ -61,43 +69,73 @@ async function loadOptions() {
 }
 async function loadProject(preserve = false) {
   if (!projectId.value) return;
+  const request = ++projectRequest;
+  ++nodeRequest;
+  const id = projectId.value;
   busy.value = true;
   error.value = "";
+  if (!preserve) {
+    project.value = undefined;
+    plans.value = [];
+    planId.value = "";
+    metric.value = undefined;
+    nodes.value = { items: [], total: 0, page: 1, page_size: 20 };
+  }
   try {
     const [p, v] = await Promise.all([
-      api<Project>(`/projects/${projectId.value}`),
-      api<Plan[]>(`/projects/${projectId.value}/plan-versions`),
+      api<Project>(`/projects/${id}`),
+      api<Plan[]>(`/projects/${id}/plan-versions`),
     ]);
+    if (request !== projectRequest) return;
     project.value = p;
     plans.value = v;
     if (!preserve || !v.some((x) => x.id === planId.value))
       planId.value = p.current_plan_version_id || v[0]?.id || "";
     await loadNodes();
-    void router.replace({ query: { project: projectId.value } });
+    if (request === projectRequest)
+      void router.replace({ query: { project: id } });
   } catch (e) {
-    error.value = errorMessage(e);
+    if (request === projectRequest) error.value = errorMessage(e);
   } finally {
-    busy.value = false;
+    if (request === projectRequest) busy.value = false;
   }
 }
 async function loadNodes(page = 1) {
+  const request = ++nodeRequest;
   if (!planId.value) return;
+  const id = projectId.value,
+    plan = planId.value;
+  const effective = selectedPlan.value?.status !== "draft";
   busy.value = true;
   error.value = "";
+  metric.value = undefined;
+  metricError.value = "";
   try {
     const q = new URLSearchParams({
-      plan_version_id: planId.value,
+      plan_version_id: plan,
       type: type.value,
       department: department.value,
       page: String(page),
     });
-    nodes.value = await api<Page<Milestone>>(
-      `/projects/${projectId.value}/milestones?${q}`,
+    const result = await api<Page<Milestone>>(
+      `/projects/${id}/milestones?${q}`,
     );
+    if (request !== nodeRequest) return;
+    nodes.value = result;
+    if (effective) {
+      try {
+        const result = await api<Metric>(
+          `/projects/${id}/metrics?as_of=${businessToday()}&plan_version_id=${plan}`,
+        );
+        if (request === nodeRequest) metric.value = result;
+      } catch (e) {
+        if (request === nodeRequest) metricError.value = errorMessage(e);
+      }
+    }
   } catch (e) {
-    error.value = errorMessage(e);
+    if (request === nodeRequest) error.value = errorMessage(e);
   } finally {
-    busy.value = false;
+    if (request === nodeRequest) busy.value = false;
   }
 }
 function edit(node?: Milestone) {
@@ -181,6 +219,7 @@ onMounted(async () => {
       >计划版本<select
         v-model="planId"
         aria-label="计划版本"
+        :disabled="busy"
         @change="loadNodes()"
       >
         <option v-for="p in plans" :key="p.id" :value="p.id">
@@ -215,6 +254,10 @@ onMounted(async () => {
     >
       批准生效
     </button>
+    <div v-if="project" class="project-context-meta">
+      <strong>{{ project.department_name || "未指定部门" }}</strong
+      ><small>{{ project.owner_name || "未指定负责人" }}</small>
+    </div>
   </section>
   <p v-if="error" class="error" role="alert">
     {{ error }} <button @click="loadProject(true)">刷新重试</button>
@@ -224,46 +267,82 @@ onMounted(async () => {
     暂无项目。<RouterLink to="/projects">先创建项目</RouterLink>
   </p>
   <template v-if="project && selectedPlan">
-    <section class="card project-strip">
-      <div>
-        <strong>{{ project.project_code }} / {{ project.project_name }}</strong
-        ><small class="subline"
-          >{{ project.department_name || "未指定部门" }} ·
-          {{ project.owner_name || "未指定负责人" }}</small
-        >
+    <div class="node-stat-grid">
+      <div class="card node-stat">
+        <span>全部计划节点</span
+        ><strong>{{ metric ? metric.evidence.length : nodes.total }}</strong>
       </div>
-      <span
-        >本版节点 <b>{{ nodes.total }}</b></span
-      ><span>当前查看 {{ selectedPlan.version_label }}</span
-      ><StatusBadge :value="selectedPlan.status" />
-    </section>
-    <p v-if="!canEdit" class="notice">
-      生效及历史计划只读。调整计划请先创建变更草稿，原版本会完整保留。核实事实独立于计划版本。
+      <div class="card node-stat">
+        <span>已核实完成</span
+        ><strong class="completed">{{
+          metric ? metric.counts.verified_completed : "—"
+        }}</strong>
+      </div>
+      <div class="card node-stat">
+        <span>尚未到期</span
+        ><strong>{{ metric?.counts.not_due ?? "—" }}</strong>
+      </div>
+      <div class="card node-stat">
+        <span>待核对</span
+        ><strong class="warning-text">{{
+          metric?.counts.pending_verification ?? "—"
+        }}</strong>
+      </div>
+      <div class="card node-stat">
+        <span>延期完成</span
+        ><strong class="danger-text">{{
+          metric?.counts.late_completed ?? "—"
+        }}</strong>
+      </div>
+    </div>
+    <p v-if="metricError" class="error" role="alert">
+      统计暂不可用：{{ metricError }}
+      <button @click="loadNodes(nodes.page)">重试统计</button>
     </p>
+    <p v-if="selectedPlan.status === 'draft'" class="muted">
+      草稿尚未批准，不计算正式节点评价；批准后显示统计。
+    </p>
+
     <section class="card timeline-card">
       <div class="section-title">
-        <h3>关键里程碑时间轴</h3>
-        <span class="muted"
-          >按计划日期排序 · 当前页前 8 条 ·
-          {{ selectedPlan.version_label }}</span
-        >
+        <div class="timeline-heading">
+          <h3>关键里程碑时间轴</h3>
+          <p class="muted">
+            按计划日期排序 · 当前页前 8 条 · {{ selectedPlan.version_label }}
+          </p>
+        </div>
+        <small class="muted">{{
+          metric ? `统计截止 ${metric.as_of_date}` : "草稿未评价"
+        }}</small>
       </div>
       <div v-if="nodes.items.length" class="timeline">
         <button
           v-for="n in nodes.items.slice(0, 8)"
           :key="n.id"
           class="step-card"
+          :class="nodeCategory(n)"
           @click="showing = n"
         >
-          <small>{{ n.node_type_code }}</small
+          <TimelineDot :category="nodeCategory(n)" /><small>{{
+            n.node_type_code
+          }}</small
           ><strong>{{ n.milestone_name }}</strong
           ><span>计划 {{ n.plan_item.planned_date }}</span
           ><span>核实实际 {{ n.current_actual?.actual_date || "待确认" }}</span
-          ><StatusBadge :value="n.verification_status" />
+          ><span
+            v-if="nodeCategory(n)"
+            class="badge"
+            :class="nodeCategory(n)"
+            >{{ categoryLabels[nodeCategory(n)!] }}</span
+          ><StatusBadge v-else :value="n.verification_status" />
         </button>
       </div>
       <p v-else class="empty">该版本暂无节点</p>
     </section>
+    <details v-if="!canEdit" class="plan-readonly-note">
+      <summary>生效及历史计划只读 · 查看版本和核实说明</summary>
+      生效及历史计划只读。调整计划请先创建变更草稿，原版本会完整保留。核实事实独立于计划版本。
+    </details>
     <section class="card table-card">
       <div class="section-title">
         <h3>节点明细台账</h3>

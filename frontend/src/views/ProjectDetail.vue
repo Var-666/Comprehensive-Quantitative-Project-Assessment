@@ -2,11 +2,14 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, versionHeader } from "../api";
-import type { Audit, Project } from "../types";
+import type { Audit, Page, Project } from "../types";
+import { businessToday, categoryLabels, type Metric } from "../evaluationTypes";
+import { label, type TaskRecord } from "../workflowTypes";
 import ProjectForm from "../components/ProjectForm.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import Modal from "../components/Modal.vue";
 import ProjectMembers from "../components/ProjectMembers.vue";
+import TimelineDot from "../components/TimelineDot.vue";
 import { useAuth } from "../store";
 const auth = useAuth();
 const route = useRoute(),
@@ -17,6 +20,32 @@ const project = ref<Project>(),
   busy = ref(false),
   editing = ref(false),
   archiving = ref(false);
+const metric = ref<Metric>(),
+  summaryError = ref("");
+const tasks = ref<Page<TaskRecord>>({
+  items: [],
+  total: 0,
+  page: 1,
+  page_size: 3,
+});
+async function loadSummary(p: Project) {
+  summaryError.value = "";
+  metric.value = undefined;
+  try {
+    const [evaluation, pending] = await Promise.all([
+      p.current_plan_version_id
+        ? api<Metric>(`/projects/${p.id}/metrics?as_of=${businessToday()}`)
+        : Promise.resolve(undefined),
+      api<Page<TaskRecord>>(
+        `/tasks?project_id=${p.id}&status=todo&page_size=3`,
+      ),
+    ]);
+    metric.value = evaluation;
+    tasks.value = pending;
+  } catch (e) {
+    summaryError.value = errorMessage(e);
+  }
+}
 async function load() {
   busy.value = true;
   error.value = "";
@@ -27,6 +56,7 @@ async function load() {
     ]);
     project.value = p;
     events.value = e;
+    await loadSummary(p);
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -62,7 +92,7 @@ onMounted(load);
         <h1>{{ project.project_code }} · {{ project.project_name }}</h1>
         <p>
           项目管理 / 详情 · 当前计划
-          {{ project.current_plan_label || "尚未已生效" }}
+          {{ project.current_plan_label || "尚无生效计划" }}
         </p>
       </div>
       <div class="actions">
@@ -79,7 +109,18 @@ onMounted(load);
         </button>
       </div>
     </div>
-    <section class="card detail-card">
+    <nav class="project-detail-tabs" aria-label="项目详情导航">
+      <span aria-current="page">项目概况</span
+      ><RouterLink :to="{ path: '/milestones', query: { project: project.id } }"
+        >节点计划</RouterLink
+      ><RouterLink
+        :to="{ path: '/tasks', query: { tab: 'tasks', project: project.id } }"
+        >执行与待办</RouterLink
+      ><RouterLink :to="{ path: '/metrics', query: { project: project.id } }"
+        >量化评估</RouterLink
+      ><a href="#project-audit-history">历史变更</a>
+    </nav>
+    <section class="card detail-card project-information">
       <h3>项目基本信息 <StatusBadge :value="project.project_status" /></h3>
       <dl class="details">
         <div>
@@ -106,6 +147,18 @@ onMounted(load);
           <dt>数据来源</dt>
           <dd>{{ project.data_source }}</dd>
         </div>
+        <div>
+          <dt>当前计划版本</dt>
+          <dd>{{ project.current_plan_label || "尚无生效计划" }}</dd>
+        </div>
+        <div>
+          <dt>数据修订号</dt>
+          <dd>{{ project.row_version }}</dd>
+        </div>
+        <div>
+          <dt>最近更新</dt>
+          <dd>{{ project.updated_at.slice(0, 10) }}</dd>
+        </div>
       </dl>
       <p v-if="project.attention_note" class="notice warning">
         {{ project.attention_note }}
@@ -116,20 +169,128 @@ onMounted(load);
         <span>已录入节点</span><strong>{{ project.milestone_count }}</strong>
       </div>
       <div class="card stat">
-        <span>当前计划版本</span
-        ><strong>{{ project.current_plan_label || "草稿" }}</strong>
+        <span>已确认完成</span
+        ><strong class="completed">{{
+          metric ? metric.counts.verified_completed : "—"
+        }}</strong
+        ><small class="muted">以独立核实事实为准</small>
       </div>
       <div class="card stat">
-        <span>数据修订号</span><strong>{{ project.row_version }}</strong>
+        <span>到期待核对</span
+        ><strong class="draft">{{
+          metric?.counts.pending_verification ?? "—"
+        }}</strong
+        ><small class="muted">事实不足，不推定延期</small>
       </div>
       <div class="card stat">
-        <span>最近更新</span
-        ><strong class="phase-number">{{
-          project.updated_at.slice(0, 10)
-        }}</strong>
+        <span>延期完成</span
+        ><strong class="danger-text">{{
+          metric?.counts.late_completed ?? "—"
+        }}</strong
+        ><small class="muted">未完成与延期完成分列</small>
       </div>
     </div>
-    <section class="card table-card">
+    <p v-if="summaryError" class="error" role="alert">
+      项目摘要暂不可用：{{ summaryError }}
+      <button :disabled="busy" @click="loadSummary(project)">重试摘要</button>
+    </p>
+    <div class="project-progress-panels">
+      <section class="card project-milestones">
+        <div class="section-title">
+          <h3>项目关键里程碑</h3>
+          <RouterLink
+            :to="{ path: '/milestones', query: { project: project.id } }"
+            >查看全部节点 ›</RouterLink
+          >
+        </div>
+        <p class="muted">
+          生效计划按日期排序 · 当前展示前 5 项；不代表加权项目完成率
+        </p>
+        <div v-if="metric?.evidence.length" class="timeline detail-timeline">
+          <RouterLink
+            v-for="node in metric.evidence
+              .filter((r) => r.category !== 'excluded')
+              .slice(0, 5)"
+            :key="node.milestone_id"
+            class="step-card"
+            :class="node.category"
+            :to="{ path: '/milestones', query: { project: project.id } }"
+            ><TimelineDot :category="node.category" /><strong>{{
+              node.milestone_name
+            }}</strong
+            ><small>计划 {{ node.planned_date }}</small
+            ><small>核实实际 {{ node.actual_date || "待核对" }}</small
+            ><span class="badge" :class="node.category">{{
+              categoryLabels[node.category]
+            }}</span></RouterLink
+          >
+        </div>
+        <p v-else class="empty">
+          尚无可展示的生效计划节点，请先录入并独立批准计划。
+        </p>
+      </section>
+      <section class="card project-todos">
+        <div class="section-title">
+          <h3>项目重点待办事项</h3>
+          <span class="badge todo">待处理 {{ tasks.total }}</span>
+        </div>
+        <p class="muted">展示待处理状态任务；其他状态见提醒与待办。</p>
+        <RouterLink
+          v-for="task in tasks.items"
+          :key="task.id"
+          class="overview-todo"
+          :to="{
+            path: '/tasks',
+            query: { tab: 'tasks', project: project.id, task: task.id },
+          }"
+          ><div>
+            <strong>{{ task.title }}</strong
+            ><small>截止 {{ task.due_date }}</small>
+          </div>
+          <span class="badge" :class="task.status">{{
+            label(task.status)
+          }}</span></RouterLink
+        >
+        <p v-if="!tasks.items.length" class="empty">
+          暂无待处理任务。<RouterLink
+            :to="{
+              path: '/tasks',
+              query: { tab: 'tasks', project: project.id },
+            }"
+            >查看执行任务</RouterLink
+          >
+        </p>
+      </section>
+    </div>
+    <section class="card project-execution-summary">
+      <h3>项目执行摘要与数据质量</h3>
+      <p class="muted">
+        {{
+          metric
+            ? `统计截止 ${metric.as_of_date} · ${metric.formula.version} · ${metric.plan_version_label}`
+            : "尚无生效计划，不生成正式评价。"
+        }}
+      </p>
+      <div v-if="metric" class="execution-summary-grid">
+        <div
+          v-for="(value, title) in {
+            到期节点: metric.counts.due_total,
+            已核实按期: metric.counts.on_time_completed,
+            已核实逾期未完成: metric.counts.confirmed_overdue_unfinished,
+            待核对事项: metric.counts.pending_verification,
+          }"
+          :key="title"
+        >
+          <span>{{ title }}</span
+          ><strong>{{ value }}</strong>
+        </div>
+      </div>
+      <p v-if="metric" class="muted">
+        {{ metric.formula.score }}
+        任务反馈、通知审核通过均不替代节点实际完成核实。
+      </p>
+    </section>
+    <section id="project-audit-history" class="card table-card">
       <h3>历史变更</h3>
       <div class="table-wrap">
         <table>

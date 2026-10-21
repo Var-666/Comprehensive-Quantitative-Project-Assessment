@@ -6,7 +6,11 @@ defineProps<{ row: Evidence; metric: Metric }>();
 defineEmits<{ close: [] }>();
 </script>
 <template>
-  <Modal title="异常节点追溯" drawer @close="$emit('close')"
+  <Modal
+    class="metric-evidence-drawer"
+    title="异常节点追溯"
+    drawer
+    @close="$emit('close')"
     ><div class="notice">
       冻结计算证据 · {{ metric.plan_version_label }} · 截止
       {{ metric.as_of_date }}<br />计算时间 {{ metric.computed_at }}
