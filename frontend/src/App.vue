@@ -140,7 +140,14 @@ const isActive = (path: string) =>
         </div>
       </header>
       <main :class="`workspace-${route.path.split('/')[1] || 'overview'}`">
-        <ElConfigProvider :locale="zhCn"><RouterView /></ElConfigProvider>
+        <ElConfigProvider :locale="zhCn"
+          ><RouterView v-slot="{ Component }"
+            ><component
+              :is="Component"
+              :key="
+                route.path === '/imports' ? route.fullPath : undefined
+              " /></RouterView
+        ></ElConfigProvider>
       </main>
     </div>
   </template>

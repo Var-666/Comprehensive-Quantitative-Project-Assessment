@@ -143,17 +143,19 @@ test('forms and drawers remain inside the viewport and cancel preserves data',as
     await dialog.getByRole('button',{name:'保存并进入详情'}).click();
     expect(await dialog.locator('#project-form').evaluate(f=>f.checkValidity())).toBe(false);
     for(const select of await dialog.locator('.ui-select-field input[role="combobox"]').all()) {
+      const initialLabel=(await select.locator('xpath=ancestor::div[contains(concat(" ", @class, " "), " el-select ")][1]').locator('.el-select__selected-item').last().textContent()).trim();
       const values=await optionValues(select);
       await choose(select, values[values.length-1]);
-      await choose(select, values[0]);
+      await choose(select, {label:initialLabel});
     }
     await page.screenshot({path:path.join(evidenceRoot,`project-form-${width}.png`)});
     await dialog.getByRole('button',{name:'取消',exact:true}).click();
     await expect(dialog).toHaveCount(0);
     await page.getByRole('button',{name:'导入 Excel',exact:true}).click();
-    dialog=page.getByRole('dialog');await contained(dialog);
-    await page.screenshot({path:path.join(evidenceRoot,`import-dialog-${width}.png`)});
-    await dialog.getByRole('button',{name:'关闭',exact:true}).first().click();
+    await expect(page.locator('.import-workspace')).toBeVisible();
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await page.screenshot({path:path.join(evidenceRoot,`import-page-${width}.png`)});
+    await page.getByRole('button',{name:'返回来源页面',exact:true}).click();
     await page.goto('/milestones');
     await page.getByRole('button',{name:'查看详情',exact:true}).first().click();
     dialog=page.getByRole('dialog');await contained(dialog);

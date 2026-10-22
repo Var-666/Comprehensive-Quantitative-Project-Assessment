@@ -9,6 +9,7 @@ import { api, errorMessage, json, versionHeader } from "../api";
 import { useCatalog } from "../store";
 import type { Milestone, Plan, Project } from "../types";
 import Modal from "./Modal.vue";
+import { useUnsavedChanges } from "../useUnsavedChanges";
 const props = defineProps<{ project: Project; plan: Plan; node?: Milestone }>();
 const emit = defineEmits<{ close: []; saved: [] }>();
 const catalog = useCatalog(),
@@ -25,6 +26,11 @@ const form = reactive({
   source_ref: props.node?.plan_item.source_ref || "",
   change_reason: "",
 });
+const guard = useUnsavedChanges(
+  () => form,
+  () => true,
+  () => busy.value,
+);
 onMounted(async () => {
   try {
     await catalog.load();
@@ -51,6 +57,7 @@ async function save() {
         }),
       },
     );
+    guard.markSaved();
     emit("saved");
   } catch (e) {
     error.value = errorMessage(e);
@@ -61,7 +68,9 @@ async function save() {
 </script>
 <template>
   <Modal
-    class="node-form-modal"
+    class="form-drawer node-form-modal"
+    drawer
+    :before-close="guard.confirmDiscard"
     :title="node ? '编辑节点计划草稿' : '新增项目节点'"
     subtitle="设置节点基本属性；草稿计划需独立批准后生效"
     :busy="busy"
@@ -177,8 +186,8 @@ async function save() {
         内部计划调整不自动修改合同义务。实际完成日期须在节点详情中单独提交与核实；标准动作与提醒通过已批准的模板和规则配置。
       </p>
     </form>
-    <template #footer
-      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
         form="node-form"

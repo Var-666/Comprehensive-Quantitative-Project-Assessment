@@ -1,5 +1,15 @@
 <script setup lang="ts">
+import { useUnsavedChanges } from "../useUnsavedChanges";
+import OperationToast from "../components/OperationToast.vue";
 import PageNavigation from "../components/PageNavigation.vue";
+import StatCard from "../components/StatCard.vue";
+import {
+  List,
+  CircleCheck,
+  Calendar,
+  Clock,
+  Warning,
+} from "@element-plus/icons-vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "../components/FormSelect.vue";
 import { ElOption } from "element-plus/es/components/select/index";
@@ -14,7 +24,6 @@ import { statuses } from "../types";
 import Icon from "../components/Icon.vue";
 import NodeForm from "../components/NodeForm.vue";
 import NodeDetail from "../components/NodeDetail.vue";
-import ImportDialog from "../components/ImportDialog.vue";
 import Modal from "../components/Modal.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import TimelineDot from "../components/TimelineDot.vue";
@@ -45,7 +54,6 @@ const type = ref(""),
   showForm = ref(false),
   editing = ref<Milestone>(),
   showing = ref<Milestone>(),
-  showImport = ref(false),
   planDialog = ref<"create" | "activate">(),
   reason = ref(""),
   planBusy = ref(false),
@@ -96,10 +104,14 @@ async function loadProject(preserve = false) {
     project.value = p;
     plans.value = v;
     if (!preserve || !v.some((x) => x.id === planId.value))
-      planId.value = p.current_plan_version_id || v[0]?.id || "";
+      planId.value =
+        v.find((x) => x.id === route.query.plan)?.id ||
+        p.current_plan_version_id ||
+        v[0]?.id ||
+        "";
     await loadNodes();
     if (request === projectRequest)
-      void router.replace({ query: { project: id } });
+      void router.replace({ query: { project: id, plan: planId.value } });
   } catch (e) {
     if (request === projectRequest) error.value = errorMessage(e);
   } finally {
@@ -149,6 +161,11 @@ function edit(node?: Milestone) {
   editing.value = node;
   showForm.value = true;
 }
+const planGuard = useUnsavedChanges(
+  () => ({ reason: reason.value }),
+  () => !!planDialog.value,
+  () => planBusy.value,
+);
 async function savePlan() {
   planBusy.value = true;
   planError.value = "";
@@ -283,38 +300,50 @@ onMounted(async () => {
       >刷新重试</ElButton
     >
   </p>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <OperationToast v-model="success" :busy="busy" />
   <p v-if="!projectId && !busy" class="card empty">
     暂无项目。<RouterLink to="/projects">先创建项目</RouterLink>
   </p>
   <template v-if="project && selectedPlan">
     <div class="node-stat-grid">
-      <div class="card node-stat">
-        <span>全部计划节点</span
-        ><strong>{{ metric ? metric.evidence.length : nodes.total }}</strong>
-      </div>
-      <div class="card node-stat">
-        <span>已核实完成</span
-        ><strong class="completed">{{
-          metric ? metric.counts.verified_completed : "—"
-        }}</strong>
-      </div>
-      <div class="card node-stat">
-        <span>尚未到期</span
-        ><strong>{{ metric?.counts.not_due ?? "—" }}</strong>
-      </div>
-      <div class="card node-stat">
-        <span>待核对</span
-        ><strong class="warning-text">{{
-          metric?.counts.pending_verification ?? "—"
-        }}</strong>
-      </div>
-      <div class="card node-stat">
-        <span>延期完成</span
-        ><strong class="danger-text">{{
-          metric?.counts.late_completed ?? "—"
-        }}</strong>
-      </div>
+      <StatCard
+        class="node-stat"
+        label="全部计划节点"
+        :value="metric ? metric.evidence.length : nodes.total"
+        :icon="List"
+        compact
+      />
+      <StatCard
+        class="node-stat"
+        label="已核实完成"
+        :value="metric ? metric.counts.verified_completed : '—'"
+        :icon="CircleCheck"
+        tone="green"
+        compact
+      />
+      <StatCard
+        class="node-stat"
+        label="尚未到期"
+        :value="metric?.counts.not_due ?? '—'"
+        :icon="Calendar"
+        compact
+      />
+      <StatCard
+        class="node-stat"
+        label="待核对"
+        :value="metric?.counts.pending_verification ?? '—'"
+        :icon="Clock"
+        tone="amber"
+        compact
+      />
+      <StatCard
+        class="node-stat"
+        label="延期完成"
+        :value="metric?.counts.late_completed ?? '—'"
+        :icon="Warning"
+        tone="red"
+        compact
+      />
     </div>
     <p v-if="metricError" class="error" role="alert">
       统计暂不可用：{{ metricError }}
@@ -376,7 +405,16 @@ onMounted(async () => {
         <div class="actions">
           <ElButton
             :disabled="!canEdit"
-            @click="showImport = true"
+            @click="
+              router.push({
+                path: '/imports',
+                query: {
+                  target: 'milestones',
+                  project: projectId,
+                  plan: planId,
+                },
+              })
+            "
             native-type="submit"
           >
             <Icon name="imgVectorFileUp" />导入 Excel</ElButton
@@ -492,15 +530,9 @@ onMounted(async () => {
       @close="showing = undefined"
       @changed="loadProject(true)"
     />
-    <ImportDialog
-      v-if="showImport"
-      :project-id="projectId"
-      :plan-id="planId"
-      @close="showImport = false"
-      @imported="loadProject(true)"
-    />
     <Modal
       v-if="planDialog"
+      :before-close="planGuard.confirmDiscard"
       :title="planDialog === 'create' ? '新建计划变更草稿' : '批准计划生效'"
       :busy="planBusy"
       @close="planDialog = undefined"
@@ -527,12 +559,8 @@ onMounted(async () => {
           />
         </label>
       </form>
-      <template #footer
-        ><ElButton
-          :disabled="planBusy"
-          @click="planDialog = undefined"
-          native-type="submit"
-        >
+      <template #footer="{ close }"
+        ><ElButton :disabled="planBusy" @click="close" native-type="submit">
           取消</ElButton
         ><ElButton
           class="primary"
@@ -541,7 +569,13 @@ onMounted(async () => {
           native-type="submit"
           type="primary"
         >
-          {{ planBusy ? "处理中…" : "确认" }}
+          {{
+            planBusy
+              ? "处理中…"
+              : planDialog === "create"
+                ? "创建变更草稿"
+                : "批准计划生效"
+          }}
         </ElButton></template
       ></Modal
     >

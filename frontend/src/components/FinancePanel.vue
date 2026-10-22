@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import OperationToast from "./OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "./FormSelect.vue";
 import { ElOption } from "element-plus/es/components/select/index";
@@ -14,6 +15,7 @@ import type {
   FinancialActual,
 } from "../evaluationTypes";
 import Modal from "./Modal.vue";
+import { useUnsavedChanges } from "../useUnsavedChanges";
 const props = defineProps<{ projectId: string; asOf: string }>();
 const auth = useAuth(),
   catalog = useCatalog(),
@@ -68,7 +70,6 @@ async function load() {
   }
 }
 function open(kind: string) {
-  mode.value = kind;
   Object.assign(form, {
     record_code: "",
     direction: kind === "plan" ? "receivable" : "receipt",
@@ -79,7 +80,13 @@ function open(kind: string) {
     financial_plan_id: "",
     date_source_kind: "unconfirmed",
   });
+  mode.value = kind;
 }
+const guard = useUnsavedChanges(
+  () => (mode.value === "access" ? grant : form),
+  () => !!mode.value,
+  () => busy.value,
+);
 async function save() {
   busy.value = true;
   error.value = "";
@@ -124,6 +131,11 @@ async function save() {
     busy.value = false;
   }
 }
+const reviewGuard = useUnsavedChanges(
+  () => ({ comment: comment.value, decision: decision.value }),
+  () => !!review.value,
+  () => busy.value,
+);
 async function verify() {
   if (!review.value) return;
   busy.value = true;
@@ -171,7 +183,7 @@ onMounted(load);
       </div>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-if="success" class="success" role="status">{{ success }}</p>
+    <OperationToast v-model="success" :busy="busy" />
     <p v-if="busy" class="empty">加载中…</p>
     <p v-else-if="!me?.can_read" class="notice warning">
       当前账户未获本项目金额访问授权。项目角色不会自动获得财务权限。
@@ -283,6 +295,9 @@ onMounted(load);
     >
   </section>
   <Modal
+    class="form-drawer"
+    drawer
+    :before-close="guard.confirmDiscard"
     v-if="mode"
     :title="
       mode === 'access'
@@ -423,8 +438,8 @@ onMounted(load);
       </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
-    <template #footer
-      ><ElButton :disabled="busy" @click="mode = ''" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
         form="finance-form"
@@ -439,6 +454,7 @@ onMounted(load);
   >
   <Modal
     v-if="review"
+    :before-close="reviewGuard.confirmDiscard"
     title="独立财务核实"
     :busy="busy"
     @close="review = undefined"

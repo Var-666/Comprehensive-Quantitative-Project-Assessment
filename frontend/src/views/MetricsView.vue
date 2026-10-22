@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import OperationToast from "../components/OperationToast.vue";
 import PageNavigation from "../components/PageNavigation.vue";
+import StatCard from "../components/StatCard.vue";
+import { Calendar, TrendCharts, Warning, Clock } from "@element-plus/icons-vue";
 import FormDate from "../components/FormDate.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "../components/FormSelect.vue";
@@ -213,7 +216,7 @@ onMounted(async () => {
   <p v-if="error" class="error" role="alert">
     {{ error }} <ElButton @click="load" native-type="submit">重新加载</ElButton>
   </p>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <OperationToast v-model="success" :busy="busy" />
   <div v-if="selected" class="card filters">
     <span class="badge">{{ selected.plan_version_label }}</span
     ><span
@@ -246,36 +249,43 @@ onMounted(async () => {
   <p v-if="busy" class="empty">正在计算或读取证据…</p>
   <template v-else-if="counts"
     ><div class="stat-grid">
-      <div class="card stat">
-        <span>应完成节点</span><strong>{{ counts.due_total }}</strong
-        ><small>截止日到期且纳入计划</small>
-      </div>
-      <div class="card stat">
-        <span>按期率（试算）</span
-        ><strong class="active">{{
-          counts.on_time_rate_pct === null ? "—" : `${counts.on_time_rate_pct}%`
-        }}</strong
-        ><small
-          >O / (O + L)
-          <ElButton
-            class="text-button"
-            @click="formula = true"
-            native-type="submit"
-            link
-          >
-            查看口径
-          </ElButton></small
+      <StatCard label="应完成节点" :value="counts.due_total" :icon="Calendar">
+        截止日到期且纳入计划
+      </StatCard>
+      <StatCard
+        label="按期率（试算）"
+        :value="
+          counts.on_time_rate_pct === null ? '—' : `${counts.on_time_rate_pct}%`
+        "
+        :icon="TrendCharts"
+        tone="green"
+      >
+        O / (O + L)
+        <ElButton
+          class="text-button"
+          @click="formula = true"
+          native-type="submit"
+          link
         >
-      </div>
-      <div class="card stat">
-        <span>延期完成</span
-        ><strong class="draft">{{ counts.late_completed }}</strong
-        ><small>已有独立核实的完成事实</small>
-      </div>
-      <div class="card stat">
-        <span>待核对</span><strong>{{ counts.pending_verification }}</strong
-        ><small>事实不足，不直接归为延期</small>
-      </div>
+          查看口径
+        </ElButton>
+      </StatCard>
+      <StatCard
+        label="延期完成"
+        :value="counts.late_completed"
+        :icon="Warning"
+        tone="red"
+      >
+        已有独立核实的完成事实
+      </StatCard>
+      <StatCard
+        label="待核对"
+        :value="counts.pending_verification"
+        :icon="Clock"
+        tone="amber"
+      >
+        事实不足，不直接归为延期
+      </StatCard>
     </div>
     <div class="metric-panels">
       <section class="card metric-panel">

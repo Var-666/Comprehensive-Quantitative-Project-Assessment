@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useUnsavedChanges } from "../useUnsavedChanges";
+import OperationToast from "./OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import {
   ElCheckbox,
@@ -20,6 +22,11 @@ const auth = useAuth(),
   busy = ref(false),
   error = ref(""),
   success = ref("");
+const guard = useUnsavedChanges(
+  () => ({ selected: selected.value }),
+  () => show.value,
+  () => busy.value,
+);
 async function load() {
   try {
     links.value = await api<ActionLink[]>(
@@ -41,6 +48,7 @@ async function open() {
       .filter((l) => l.status === "active")
       .map((l) => l.snapshot_json.id || "")
       .filter(Boolean);
+    guard.markSaved();
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -84,7 +92,7 @@ onMounted(load);
       </ElButton>
     </div>
     <p v-if="error && !show" class="error" role="alert">{{ error }}</p>
-    <p v-if="success" class="success" role="status">{{ success }}</p>
+    <OperationToast v-model="success" :busy="busy" />
     <p v-if="!links.length" class="muted">
       尚未关联批准动作，不会生成对应准备任务。
     </p>
@@ -102,6 +110,7 @@ onMounted(load);
   </section>
   <Modal
     v-if="show"
+    :before-close="guard.confirmDiscard"
     title="关联标准动作"
     drawer
     :busy="busy"
@@ -141,8 +150,8 @@ onMounted(load);
     <p class="notice">
       关联动作生成的是准备工作，任务反馈及核实不会自动改变节点实际完成事实。
     </p>
-    <template #footer
-      ><ElButton :disabled="busy" @click="show = false" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
         :disabled="busy || !selected.length"

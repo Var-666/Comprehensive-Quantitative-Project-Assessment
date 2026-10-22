@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ElButton } from "element-plus/es/components/button/index";
+import StatCard from "../components/StatCard.vue";
+import { List, CircleCheck, Clock, Warning } from "@element-plus/icons-vue";
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, versionHeader } from "../api";
@@ -172,30 +174,35 @@ onMounted(load);
       </p>
     </section>
     <div class="stat-grid">
-      <div class="card stat">
-        <span>已录入节点</span><strong>{{ project.milestone_count }}</strong>
-      </div>
-      <div class="card stat">
-        <span>已确认完成</span
-        ><strong class="completed">{{
-          metric ? metric.counts.verified_completed : "—"
-        }}</strong
-        ><small class="muted">以独立核实事实为准</small>
-      </div>
-      <div class="card stat">
-        <span>到期待核对</span
-        ><strong class="draft">{{
-          metric?.counts.pending_verification ?? "—"
-        }}</strong
-        ><small class="muted">事实不足，不推定延期</small>
-      </div>
-      <div class="card stat">
-        <span>延期完成</span
-        ><strong class="danger-text">{{
-          metric?.counts.late_completed ?? "—"
-        }}</strong
-        ><small class="muted">未完成与延期完成分列</small>
-      </div>
+      <StatCard
+        label="已录入节点"
+        :value="project.milestone_count"
+        :icon="List"
+      />
+      <StatCard
+        label="已确认完成"
+        :value="metric ? metric.counts.verified_completed : '—'"
+        :icon="CircleCheck"
+        tone="green"
+      >
+        以独立核实事实为准
+      </StatCard>
+      <StatCard
+        label="到期待核对"
+        :value="metric?.counts.pending_verification ?? '—'"
+        :icon="Clock"
+        tone="amber"
+      >
+        事实不足，不推定延期
+      </StatCard>
+      <StatCard
+        label="延期完成"
+        :value="metric?.counts.late_completed ?? '—'"
+        :icon="Warning"
+        tone="red"
+      >
+        未完成与延期完成分列
+      </StatCard>
     </div>
     <p v-if="summaryError" class="error" role="alert">
       项目摘要暂不可用：{{ summaryError }}

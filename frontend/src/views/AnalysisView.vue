@@ -1,5 +1,9 @@
 <script setup lang="ts">
+import { useUnsavedChanges } from "../useUnsavedChanges";
+import OperationToast from "../components/OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
+import StatCard from "../components/StatCard.vue";
+import { Calendar, TrendCharts, Warning, Clock } from "@element-plus/icons-vue";
 import FormSelect from "../components/FormSelect.vue";
 import { ElOption } from "element-plus/es/components/select/index";
 import FormDate from "../components/FormDate.vue";
@@ -171,6 +175,11 @@ async function removeReport() {
     busy.value = false;
   }
 }
+const reviewGuard = useUnsavedChanges(
+  () => ({ comment: comment.value, decision: decision.value }),
+  () => reviewOpen.value,
+  () => busy.value,
+);
 async function review() {
   if (!selected.value) return;
   busy.value = true;
@@ -235,7 +244,7 @@ onMounted(async () => {
     <RouterLink class="button" to="/metrics">查看量化评估</RouterLink>
   </div>
   <p v-if="error" class="error" role="alert">{{ error }}</p>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <OperationToast v-model="success" :busy="busy" />
   <div class="tabs">
     <ElButton
       :class="{ primary: tab === 'reports' }"
@@ -431,34 +440,43 @@ onMounted(async () => {
           }}{{ selected.contains_finance ? " · 含受限财务数据" : "" }}
         </p>
         <div class="report-stats">
-          <div>
-            <small>应完成</small
-            ><strong>{{
-              selected.fact_bundle_json.metric_payload.counts.due_total
-            }}</strong>
-          </div>
-          <div>
-            <small>按期率（试算）</small
-            ><strong
-              >{{
-                selected.fact_bundle_json.metric_payload.counts
-                  .on_time_rate_pct ?? "—"
-              }}%</strong
-            >
-          </div>
-          <div>
-            <small>延期完成</small
-            ><strong>{{
+          <StatCard
+            label="应完成"
+            :value="selected.fact_bundle_json.metric_payload.counts.due_total"
+            :icon="Calendar"
+            compact
+          />
+          <StatCard
+            label="按期率（试算）"
+            :value="
+              selected.fact_bundle_json.metric_payload.counts
+                .on_time_rate_pct === null
+                ? '—'
+                : `${selected.fact_bundle_json.metric_payload.counts.on_time_rate_pct}%`
+            "
+            :icon="TrendCharts"
+            tone="green"
+            compact
+          />
+          <StatCard
+            label="延期完成"
+            :value="
               selected.fact_bundle_json.metric_payload.counts.late_completed
-            }}</strong>
-          </div>
-          <div>
-            <small>待核对</small
-            ><strong>{{
+            "
+            :icon="Warning"
+            tone="red"
+            compact
+          />
+          <StatCard
+            label="待核对"
+            :value="
               selected.fact_bundle_json.metric_payload.counts
                 .pending_verification
-            }}</strong>
-          </div>
+            "
+            :icon="Clock"
+            tone="amber"
+            compact
+          />
         </div>
         <ReportContent :content="selected.content" />
         <details class="report-sources">
@@ -553,6 +571,7 @@ onMounted(async () => {
   </Modal>
   <Modal
     v-if="reviewOpen && selected"
+    :before-close="reviewGuard.confirmDiscard"
     title="独立报告审核"
     :busy="busy"
     @close="reviewOpen = false"

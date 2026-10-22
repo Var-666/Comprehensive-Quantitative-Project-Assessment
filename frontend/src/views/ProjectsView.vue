@@ -1,5 +1,13 @@
 <script setup lang="ts">
+import OperationToast from "../components/OperationToast.vue";
 import PageNavigation from "../components/PageNavigation.vue";
+import StatCard from "../components/StatCard.vue";
+import {
+  FolderOpened,
+  VideoPlay,
+  EditPen,
+  CircleCheck,
+} from "@element-plus/icons-vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import { ElInput } from "element-plus/es/components/input/index";
 import FormSelect from "../components/FormSelect.vue";
@@ -13,7 +21,6 @@ import { useAuth } from "../store";
 const auth = useAuth();
 import Icon from "../components/Icon.vue";
 import ProjectForm from "../components/ProjectForm.vue";
-import ImportDialog from "../components/ImportDialog.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 const router = useRouter();
 const data = ref<Page<Project>>({
@@ -30,8 +37,7 @@ const keyword = ref(""),
   busy = ref(false),
   success = ref("");
 const showForm = ref(false),
-  editing = ref<Project>(),
-  showImport = ref(false);
+  editing = ref<Project>();
 async function load(page = 1) {
   busy.value = true;
   error.value = "";
@@ -80,7 +86,9 @@ onMounted(() => load());
     <div class="actions">
       <ElButton
         :disabled="!auth.user?.is_system_admin"
-        @click="showImport = true"
+        @click="
+          router.push({ path: '/imports', query: { target: 'projects' } })
+        "
         native-type="submit"
       >
         <Icon name="imgVectorFileUp" />导入 Excel</ElButton
@@ -147,7 +155,7 @@ onMounted(() => load());
     </ElButton>
   </form>
   <div class="stat-grid">
-    <div
+    <StatCard
       v-for="(label, key) in {
         total: '全部项目',
         active: '执行中',
@@ -155,13 +163,20 @@ onMounted(() => load());
         completed: '已完成',
       }"
       :key="key"
-      class="card stat"
-    >
-      <span>{{ label }}</span
-      ><strong :class="key">{{ summary[key] }}</strong>
-    </div>
+      :label="label"
+      :value="summary[key]"
+      :icon="
+        {
+          total: FolderOpened,
+          active: VideoPlay,
+          draft: EditPen,
+          completed: CircleCheck,
+        }[key]
+      "
+      :tone="key === 'completed' ? 'green' : key === 'draft' ? 'amber' : 'blue'"
+    />
   </div>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <OperationToast v-model="success" :busy="busy" />
   <p v-if="error" class="error" role="alert">
     {{ error }}
     <ElButton @click="load(data.page)" native-type="submit">重试</ElButton>
@@ -242,13 +257,5 @@ onMounted(() => load());
     :project="editing"
     @close="showForm = false"
     @saved="saved"
-  />
-  <ImportDialog
-    v-if="showImport"
-    @close="showImport = false"
-    @imported="
-      success = 'Excel 导入已写入本地数据库';
-      load();
-    "
   />
 </template>

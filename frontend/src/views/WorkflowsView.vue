@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useUnsavedChanges } from "../useUnsavedChanges";
+import OperationToast from "../components/OperationToast.vue";
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
 import { ElButton } from "element-plus/es/components/button/index";
@@ -172,6 +174,11 @@ function openReview(action: string) {
   reviewComment.value = "";
   confirmed.value = false;
 }
+const reviewGuard = useUnsavedChanges(
+  () => ({ comment: reviewComment.value, confirmed: confirmed.value }),
+  () => !!reviewAction.value,
+  () => busy.value,
+);
 async function review() {
   await mutate(
     "review",
@@ -279,7 +286,7 @@ onMounted(async () => {
     <p v-if="error" class="error" role="alert">
       {{ error }} <ElButton @click="load()">重试</ElButton>
     </p>
-    <p v-if="success" class="success" role="status">{{ success }}</p>
+    <OperationToast v-model="success" :busy="busy" />
     <form
       v-if="['notices', 'tasks'].includes(tab)"
       class="filters compact"
@@ -704,6 +711,7 @@ onMounted(async () => {
   />
   <Modal
     v-if="reviewAction && selected"
+    :before-close="reviewGuard.confirmDiscard"
     title="通知审核确认"
     :busy="busy"
     @close="reviewAction = ''"
@@ -737,8 +745,8 @@ onMounted(async () => {
       </label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
-    <template #footer
-      ><ElButton :disabled="busy" @click="reviewAction = ''">返回修改</ElButton
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close">返回修改</ElButton
       ><ElButton
         type="primary"
         class="primary"

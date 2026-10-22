@@ -9,6 +9,7 @@ import { api, errorMessage, json, versionHeader } from "../api";
 import { useCatalog, useAuth } from "../store";
 import { statuses, type Project } from "../types";
 import Modal from "./Modal.vue";
+import { useUnsavedChanges } from "../useUnsavedChanges";
 const props = defineProps<{ project?: Project }>();
 const emit = defineEmits<{ close: []; saved: [project: Project] }>();
 const catalog = useCatalog();
@@ -32,6 +33,11 @@ onMounted(async () => {
     error.value = errorMessage(e);
   }
 });
+const guard = useUnsavedChanges(
+  () => form,
+  () => true,
+  () => busy.value,
+);
 async function save() {
   busy.value = true;
   error.value = "";
@@ -52,6 +58,7 @@ async function save() {
       },
     );
     await useAuth().load();
+    guard.markSaved();
     emit("saved", result);
   } catch (e) {
     error.value = errorMessage(e);
@@ -62,6 +69,9 @@ async function save() {
 </script>
 <template>
   <Modal
+    class="form-drawer"
+    drawer
+    :before-close="guard.confirmDiscard"
     :title="project ? '编辑项目' : '新建项目'"
     :subtitle="
       project
@@ -179,8 +189,8 @@ async function save() {
         项目编号必须唯一，正式编号规则与类型目录待确认。新建项目仅创建初始计划草稿，不自动生成业务节点。
       </p>
     </form>
-    <template #footer
-      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
         class="primary"

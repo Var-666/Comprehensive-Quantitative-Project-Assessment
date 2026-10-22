@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import OperationToast from "./OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormDate from "./FormDate.vue";
 import { ElInput } from "element-plus/es/components/input/index";
@@ -11,6 +12,7 @@ import type { ReminderRule, Calendar } from "../workflowTypes";
 import { label } from "../workflowTypes";
 import ConfigApproval from "./ConfigApproval.vue";
 import Modal from "./Modal.vue";
+import { useUnsavedChanges } from "../useUnsavedChanges";
 const props = defineProps<{ kind: "rules" | "calendars" }>();
 const auth = useAuth(),
   catalog = useCatalog(),
@@ -124,6 +126,11 @@ function prefill() {
     );
   form.entries = lines.join("\n");
 }
+const guard = useUnsavedChanges(
+  () => form,
+  () => show.value,
+  () => busy.value,
+);
 async function save() {
   busy.value = true;
   error.value = "";
@@ -237,7 +244,7 @@ onMounted(load);
   <p v-if="error" class="error" role="alert">
     {{ error }} <ElButton @click="load" native-type="submit">重试</ElButton>
   </p>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <OperationToast v-model="success" :busy="busy" />
   <p v-if="busy && !show" class="empty" role="status">正在加载配置…</p>
   <template v-if="kind === 'rules'">
     <p class="notice">
@@ -333,6 +340,9 @@ onMounted(load);
     </section>
   </template>
   <Modal
+    class="form-drawer"
+    drawer
+    :before-close="guard.confirmDiscard"
     v-if="show"
     :title="
       (editing && !copying ? '编辑' : '新建') +
@@ -467,8 +477,8 @@ onMounted(load);
         ></template>
       </div>
     </form>
-    <template #footer
-      ><ElButton :disabled="busy" @click="show = false" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
         form="rule-calendar"

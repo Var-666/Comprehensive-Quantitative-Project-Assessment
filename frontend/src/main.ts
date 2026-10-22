@@ -14,6 +14,8 @@ import "element-plus/es/components/pagination/style/css";
 import "element-plus/es/components/select/style/css";
 import "element-plus/es/components/tag/style/css";
 import "element-plus/es/components/upload/style/css";
+import "element-plus/es/components/message/style/css";
+import "element-plus/es/components/message-box/style/css";
 import "@fontsource-variable/noto-sans-sc";
 import "./style.css";
 import "./element-plus.css";
@@ -35,6 +37,11 @@ const router = createRouter({
       path: "/projects/:id",
       component: () => import("./views/ProjectDetail.vue"),
       meta: { title: "项目管理" },
+    },
+    {
+      path: "/imports",
+      component: () => import("./views/ImportView.vue"),
+      meta: { title: "Excel 数据导入" },
     },
     {
       path: "/milestones",

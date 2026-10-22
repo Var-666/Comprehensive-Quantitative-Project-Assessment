@@ -2,7 +2,9 @@
 import { ElInput } from "element-plus/es/components/input/index";
 import { ElCheckbox } from "element-plus/es/components/checkbox/index";
 import { ElButton } from "element-plus/es/components/button/index";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useUnsavedChanges } from "../useUnsavedChanges";
 import {
   ElUpload,
   type UploadFile,
@@ -10,22 +12,35 @@ import {
   type UploadRawFile,
 } from "element-plus/es/components/upload/index";
 import { api, errorMessage, json } from "../api";
-import type { Batch } from "../types";
-import Modal from "./Modal.vue";
-import StatusBadge from "./StatusBadge.vue";
+import type { Batch, Project, Plan } from "../types";
+import StatusBadge from "../components/StatusBadge.vue";
 import { useAuth } from "../store";
-const props = defineProps<{ projectId?: string; planId?: string }>();
-const emit = defineEmits<{ close: []; imported: [] }>();
-const target = props.projectId ? "milestones" : "projects";
+const route = useRoute(),
+  router = useRouter(),
+  auth = useAuth();
+const projectId =
+  typeof route.query.project === "string" ? route.query.project : undefined;
+const planId =
+  typeof route.query.plan === "string" ? route.query.plan : undefined;
+const target = route.query.target === "milestones" ? "milestones" : "projects";
+const contextReady = ref(false),
+  contextTitle = ref("");
+const returnTo = projectId
+  ? { path: "/milestones", query: { project: projectId, plan: planId } }
+  : { path: "/projects" };
+function leave() {
+  void router.push(returnTo);
+}
+
 const file = ref<File>(),
   busy = ref(false),
   error = ref(""),
   batch = ref<Batch>(),
   confirmed = ref(false);
-const sheet = ref(props.projectId ? "02_节点计划" : "01_项目台账"),
+const sheet = ref(projectId ? "02_节点计划" : "01_项目台账"),
   header = ref(6);
 const mapping = ref<Record<string, string>>(
-  props.projectId
+  projectId
     ? {
         project_code: "项目编号",
         milestone_code: "节点编号",
@@ -48,7 +63,57 @@ const mapping = ref<Record<string, string>>(
       },
 );
 const committed = computed(() => !!batch.value?.result_json);
+const guard = useUnsavedChanges(
+  () => ({
+    file: file.value
+      ? {
+          name: file.value.name,
+          size: file.value.size,
+          modified: file.value.lastModified,
+        }
+      : null,
+    sheet: sheet.value,
+    header: header.value,
+    mapping: mapping.value,
+  }),
+  () => !committed.value,
+  () => busy.value,
+);
 const idempotencyKey = crypto.randomUUID();
+onMounted(async () => {
+  try {
+    if (!["projects", "milestones"].includes(String(route.query.target)))
+      throw new Error("导入目标无效，请从项目或节点页面重新进入。");
+    if (target === "projects") {
+      if (projectId || planId)
+        throw new Error("项目导入不接受节点计划上下文，请从项目页重新进入。");
+      if (!auth.user?.is_system_admin)
+        throw new Error("仅系统管理员可导入项目。");
+      contextTitle.value = "项目台账导入";
+    } else {
+      if (!projectId || !planId || !auth.can(projectId))
+        throw new Error("缺少项目编辑权限或草稿计划，请从节点页面重新进入。");
+      const [project, plans] = await Promise.all([
+        api<Project>(`/projects/${projectId}`),
+        api<Plan[]>(`/projects/${projectId}/plan-versions`),
+      ]);
+      const plan = plans.find((p) => p.id === planId);
+      if (
+        !plan ||
+        plan.status !== "draft" ||
+        project.project_status === "archived"
+      )
+        throw new Error(
+          "只能向当前项目的草稿计划导入节点，请返回节点页重新选择。",
+        );
+      contextTitle.value = `${project.project_code} · ${project.project_name} / ${plan.version_label} 草稿`;
+    }
+    contextReady.value = true;
+  } catch (e) {
+    contextTitle.value = "导入条件不满足";
+    error.value = errorMessage(e);
+  }
+});
 const upload = ref<UploadInstance>();
 function choose(value: UploadFile) {
   file.value = value.raw;
@@ -78,8 +143,8 @@ async function preview() {
         ),
       ),
     );
-    if (props.projectId) data.append("project_id", props.projectId);
-    if (props.planId) data.append("plan_version_id", props.planId);
+    if (projectId) data.append("project_id", projectId);
+    if (planId) data.append("plan_version_id", planId);
     batch.value = await api<Batch>("/imports/preview", {
       method: "POST",
       body: data,
@@ -103,7 +168,7 @@ async function commit() {
       }),
     });
     await useAuth().load();
-    emit("imported");
+    guard.markSaved();
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -112,12 +177,16 @@ async function commit() {
 }
 </script>
 <template>
-  <Modal
-    title="Excel 数据导入 · 字段映射与校验"
-    wide
-    :busy="busy"
-    @close="emit('close')"
-  >
+  <div class="page-title">
+    <div>
+      <h1>Excel 数据导入</h1>
+      <p>{{ contextTitle || "正在核对导入权限与计划…" }}</p>
+    </div>
+    <ElButton :disabled="busy" @click="leave" native-type="button">{{
+      committed ? "返回台账" : "返回来源页面"
+    }}</ElButton>
+  </div>
+  <section class="card import-workspace" :aria-busy="busy">
     <div class="steps">
       <span :class="{ selected: !batch }">① 选择文件与映射</span
       ><span :class="{ selected: batch && !committed }">② 校验预览</span
@@ -239,8 +308,8 @@ async function commit() {
         >我已核对预览，确认将合法数据写入本地演示库</ElCheckbox
       >
     </template>
-    <template #footer>
-      <ElButton :disabled="busy" @click="emit('close')" native-type="submit">
+    <footer class="import-footer">
+      <ElButton :disabled="busy" @click="leave" native-type="submit">
         {{ committed ? "完成" : "取消" }}
       </ElButton>
       <ElButton
@@ -257,7 +326,7 @@ async function commit() {
       <ElButton
         v-if="!batch"
         class="primary"
-        :disabled="busy || !file"
+        :disabled="busy || !file || !contextReady"
         @click="preview"
         native-type="submit"
         type="primary"
@@ -274,6 +343,6 @@ async function commit() {
       >
         {{ busy ? "写入中…" : "确认导入" }}
       </ElButton>
-    </template>
-  </Modal>
+    </footer>
+  </section>
 </template>

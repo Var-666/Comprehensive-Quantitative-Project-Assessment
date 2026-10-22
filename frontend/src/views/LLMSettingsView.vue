@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import OperationToast from "../components/OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import { ElInput } from "element-plus/es/components/input/index";
 import FormSelect from "../components/FormSelect.vue";
@@ -15,6 +16,7 @@ import {
   type LLMTestResult,
 } from "../llmTypes";
 import Modal from "../components/Modal.vue";
+import { useUnsavedChanges } from "../useUnsavedChanges";
 const auth = useAuth(),
   configuration = ref<LLMConfiguration>(),
   models = ref<LLMModel[]>([]),
@@ -28,6 +30,7 @@ const auth = useAuth(),
   removeConfirmed = ref(false),
   replaceEnvironment = ref(false),
   result = ref<LLMTestResult>(),
+  resultOpen = ref(false),
   defaultOpen = ref(false),
   auditTab = ref("events"),
   auditRows = ref<Record<string, unknown>[]>([]);
@@ -64,6 +67,21 @@ const form = reactive({
   timeout_seconds: 20,
 });
 const manual = reactive({ model_id: "", display_name: "" });
+const serviceGuard = useUnsavedChanges(
+  () => form,
+  () => !!configuration.value,
+  () => busy.value,
+);
+const keyGuard = useUnsavedChanges(
+  () => ({ key: keyInput.value }),
+  () => modal.value === "key",
+  () => busy.value,
+);
+const manualGuard = useUnsavedChanges(
+  () => manual,
+  () => modal.value === "manual",
+  () => busy.value,
+);
 const isHTTPS = window.location.protocol === "https:";
 const canManageCredentials = computed(
   () =>
@@ -106,6 +124,7 @@ function acceptConfig(c: LLMConfiguration) {
     "timeout_seconds",
   ] as const)
     Object.assign(form, { [k]: c[k] });
+  serviceGuard.markSaved();
 }
 function close() {
   if (busy.value) return;
@@ -186,6 +205,12 @@ async function saveKey() {
     }
   });
 }
+async function confirmRemoveKey() {
+  if (!(await keyGuard.confirmDiscard())) return;
+  keyInput.value = "";
+  modal.value = "remove";
+  removeConfirmed.value = false;
+}
 async function removeKey() {
   await run(async () => {
     const c = await api<LLMConfiguration>("/settings/llm/credential", {
@@ -214,11 +239,11 @@ async function testConnection(refresh = false) {
     acceptConfig(r.config);
     if (r.models) models.value = r.models;
     result.value = r.result;
+    resultOpen.value = !r.result.ok;
     if (refresh && r.result.ok) {
       await verifyPendingModels();
       return;
     }
-    modal.value = "result";
     if (r.result.ok) success.value = r.result.message;
     else error.value = r.result.message;
   });
@@ -298,7 +323,7 @@ async function testModel(m: LLMModel) {
   await run(async () => {
     const r = await requestModelTest(m);
     result.value = r;
-    modal.value = "result";
+    resultOpen.value = !r.ok;
     if (r.ok) success.value = r.message;
     else error.value = r.message;
   });
@@ -414,7 +439,7 @@ onMounted(() => {
     </ElButton>
   </div>
   <p v-if="error" class="error" role="alert">{{ error }}</p>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <OperationToast v-model="success" :busy="busy" />
   <p v-if="!canAdmin" class="notice warning">
     仅系统管理员可访问大模型配置，请联系管理员。
   </p>
@@ -629,6 +654,77 @@ onMounted(() => {
         >
       </section>
     </div>
+    <section
+      v-if="result && resultOpen"
+      class="card llm-test-result"
+      aria-label="连接测试详情"
+    >
+      <h3>连接测试结果</h3>
+      <p
+        v-if="result.revision !== configuration.revision"
+        class="notice warning"
+      >
+        配置已变化，此结果仅代表当时配置，请重新测试。
+      </p>
+      <p class="muted">
+        {{
+          result.code === "LLM_CREDENTIAL_MISSING"
+            ? "尚未配置密钥，未向平台发送请求。"
+            : "测试由后端执行；列表查询与模型调用独立记录。"
+        }}
+      </p>
+      <div :class="result.ok ? 'success' : 'notice warning'">
+        <strong>{{ result.ok ? "测试通过" : "当前测试未通过" }}</strong>
+        <p>{{ result.message }}</p>
+      </div>
+      <div class="llm-test-field">
+        <strong>服务地址</strong>
+        <p>{{ configuration.base_url }}</p>
+      </div>
+      <div
+        v-for="item in [
+          { label: '服务连接状态', value: result.service_status },
+          { label: '身份认证状态', value: result.authentication_status },
+          { label: '模型列表查询', value: result.model_list_status },
+          { label: '选定模型调用', value: result.model_call_status },
+        ]"
+        :key="item.label"
+        class="llm-test-field"
+      >
+        <strong>{{ item.label }}</strong
+        ><span>{{
+          item.label === "模型列表查询" && item.value === "available"
+            ? "列表读取成功"
+            : llmState[item.value] || item.value
+        }}</span>
+      </div>
+      <small class="muted"
+        >最近测试 {{ displayTime(result.tested_at)
+        }}{{
+          result.http_status ? ` · 平台HTTP ${result.http_status}` : ""
+        }}</small
+      >
+      <p class="notice">
+        /models 不可用时允许手动配置准确模型 ID，不能据此认定 Key
+        无效或模型不可用。
+      </p>
+      <div class="actions">
+        <ElButton @click="resultOpen = false" native-type="button"
+          >收起详情</ElButton
+        ><ElButton
+          v-if="!configuration.key_configured"
+          @click="keyModal"
+          native-type="button"
+          >前往 API Key 配置</ElButton
+        >
+      </div>
+    </section>
+    <ElButton
+      v-if="result && !resultOpen"
+      @click="resultOpen = true"
+      native-type="button"
+      >查看测试详情</ElButton
+    >
     <section class="card llm-model-card">
       <div class="llm-model-title">
         <div>
@@ -762,6 +858,7 @@ onMounted(() => {
   </ElButton>
   <Modal
     v-if="modal === 'key' && configuration"
+    :before-close="keyGuard.confirmDiscard"
     title="配置 API Key"
     subtitle="密钥仅服务端接收，保存后不可查看完整内容"
     class="llm-key-modal"
@@ -824,16 +921,12 @@ onMounted(() => {
     </form>
     <ElButton
       :disabled="busy || !configuration.key_configured || !canManageCredentials"
-      @click="
-        keyInput = '';
-        modal = 'remove';
-        removeConfirmed = false;
-      "
+      @click="confirmRemoveKey"
       native-type="submit"
     >
       移除已保存 Key</ElButton
     ><small class="muted">移除操作需要再次确认，本页不展示真实密钥值。</small
-    ><template #footer
+    ><template #footer="{ close }"
       ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
@@ -878,6 +971,7 @@ onMounted(() => {
   >
   <Modal
     v-if="modal === 'manual'"
+    :before-close="manualGuard.confirmDiscard"
     title="手动添加模型"
     subtitle="无法获取列表时，使用服务商提供的准确模型 ID"
     class="llm-manual-modal"
@@ -918,7 +1012,7 @@ onMounted(() => {
       </p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
-    <template #footer
+    <template #footer="{ close }"
       ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
@@ -933,68 +1027,8 @@ onMounted(() => {
     ></Modal
   >
   <Modal
-    v-if="modal === 'result' && result && configuration"
-    title="连接测试结果"
-    class="llm-result-modal"
-    :busy="busy"
-    @close="close"
-    ><p class="muted">
-      {{
-        result.code === "LLM_CREDENTIAL_MISSING"
-          ? "尚未配置密钥，未向平台发送请求。"
-          : "测试由后端执行；列表查询与模型调用独立记录。"
-      }}
-    </p>
-    <div :class="result.ok ? 'success' : 'notice warning'">
-      <strong>{{ result.ok ? "测试通过" : "当前测试未通过" }}</strong>
-      <p>{{ result.message }}</p>
-    </div>
-    <div class="llm-test-field">
-      <strong>服务地址</strong>
-      <p>{{ configuration.base_url }}</p>
-    </div>
-    <div
-      v-for="item in [
-        { label: '服务连接状态', value: result.service_status },
-        { label: '身份认证状态', value: result.authentication_status },
-        { label: '模型列表查询', value: result.model_list_status },
-        { label: '选定模型调用', value: result.model_call_status },
-      ]"
-      :key="item.label"
-      class="llm-test-field"
-    >
-      <strong>{{ item.label }}</strong
-      ><span>{{
-        item.label === "模型列表查询" && item.value === "available"
-          ? "列表读取成功"
-          : llmState[item.value] || item.value
-      }}</span>
-    </div>
-    <small class="muted"
-      >最近测试 {{ displayTime(result.tested_at)
-      }}{{
-        result.http_status ? ` · 平台HTTP ${result.http_status}` : ""
-      }}</small
-    >
-    <p class="notice">
-      /models 不可用时允许手动配置准确模型 ID，不能据此认定 Key
-      无效或模型不可用。
-    </p>
-    <template #footer
-      ><ElButton @click="close" native-type="submit">关闭结果</ElButton
-      ><ElButton
-        v-if="!configuration.key_configured"
-        class="primary"
-        @click="keyModal"
-        native-type="submit"
-        type="primary"
-      >
-        前往 API Key 配置
-      </ElButton></template
-    ></Modal
-  >
-  <Modal
     v-if="modal === 'service' && configuration"
+    :before-close="serviceGuard.confirmDiscard"
     title="管理模型服务"
     :busy="busy"
     @close="close"
@@ -1060,7 +1094,7 @@ onMounted(() => {
       >
       <p v-if="error" class="error full" role="alert">{{ error }}</p>
     </form>
-    <template #footer
+    <template #footer="{ close }"
       ><ElButton
         v-if="configuration.source === 'environment'"
         :disabled="

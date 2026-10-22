@@ -10,6 +10,7 @@ const props = defineProps<{
   wide?: boolean;
   drawer?: boolean;
   busy?: boolean;
+  beforeClose?: () => Promise<boolean>;
 }>();
 const emit = defineEmits<{ close: [] }>();
 const attrs = useAttrs();
@@ -17,8 +18,9 @@ const titleId = useId();
 const workspaceOverlay = computed(() =>
   /llm-(key|manual|result)-modal/.test(String(attrs.class || "")),
 );
-function close() {
-  if (!props.busy) emit("close");
+async function close() {
+  if (!props.busy && (!props.beforeClose || (await props.beforeClose())))
+    emit("close");
 }
 </script>
 <template>
@@ -64,7 +66,7 @@ function close() {
     </div>
     <div class="modal-body"><slot /></div>
     <template v-if="$slots.footer" #footer>
-      <div class="modal-footer"><slot name="footer" /></div>
+      <div class="modal-footer"><slot name="footer" :close="close" /></div>
     </template>
   </component>
 </template>

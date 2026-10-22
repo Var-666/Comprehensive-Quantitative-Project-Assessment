@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useUnsavedChanges } from "../useUnsavedChanges";
+import OperationToast from "./OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "./FormSelect.vue";
 import { ElOption } from "element-plus/es/components/select/index";
@@ -27,6 +29,17 @@ const auth = useAuth(),
   audit = ref<{ action: string; actor_id: string; occurred_at: string }[]>([]);
 const executor = computed(
   () => detail.value.assignee_id === auth.user?.user_id,
+);
+const guard = useUnsavedChanges(
+  () => ({
+    assignee: assignee.value,
+    comment: comment.value,
+    evidence: evidence.value,
+    claimed: claimed.value,
+    review: review.value,
+  }),
+  () => true,
+  () => busy.value,
 );
 async function load() {
   detail.value = await api<TaskRecord>(`/tasks/${props.task.id}`);
@@ -65,6 +78,8 @@ async function update(status?: string) {
       }),
     "任务更新已保存",
   );
+  if (!error.value)
+    guard.markSaved(status ? ["comment"] : ["assignee", "comment"]);
 }
 async function feedback() {
   await perform(
@@ -80,6 +95,7 @@ async function feedback() {
       }),
     "执行反馈已提交，仍需独立核实；节点完成事实未改变",
   );
+  if (!error.value) guard.markSaved(["comment", "evidence", "claimed"]);
 }
 async function verify(id: string, decision: string) {
   if (!review.value.trim()) {
@@ -94,6 +110,7 @@ async function verify(id: string, decision: string) {
       }),
     "核实结果已留痕；不等同节点完成",
   );
+  if (!error.value) guard.markSaved(["review"]);
 }
 onMounted(async () => {
   try {
@@ -106,6 +123,7 @@ onMounted(async () => {
 </script>
 <template>
   <Modal
+    :before-close="guard.confirmDiscard"
     class="task-drawer"
     title="任务执行反馈"
     :subtitle="task.title"
@@ -142,7 +160,7 @@ onMounted(async () => {
       </div>
     </template>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-if="success" class="success" role="status">{{ success }}</p>
+    <OperationToast v-model="success" :busy="busy" />
     <p v-if="detail.requires_review" class="notice">
       来源变更需复核：{{
         detail.review_reason
@@ -346,8 +364,8 @@ onMounted(async () => {
       </section>
       <p v-if="!audit.length" class="empty">尚无操作记录。</p></template
     >
-    <template #footer
-      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >关闭</ElButton
       ></template
     >

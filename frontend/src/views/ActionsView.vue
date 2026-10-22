@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import OperationToast from "../components/OperationToast.vue";
 import PageNavigation from "../components/PageNavigation.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "../components/FormSelect.vue";
@@ -107,7 +108,7 @@ onMounted(() => load());
   <p v-if="error" class="error" role="alert">
     {{ error }} <ElButton @click="load()" native-type="submit">重试</ElButton>
   </p>
-  <p v-if="success" class="success" role="status">{{ success }}</p>
+  <OperationToast v-model="success" :busy="busy" />
   <template v-if="tab === 'templates'">
     <p v-if="busy" class="empty" role="status">正在加载动作模板…</p>
     <div v-else class="workflow-split template-split">

@@ -390,37 +390,6 @@ main {
   gap: 16px;
   margin-bottom: 20px;
 }
-.stat-grid .card {
-  margin-bottom: 0;
-}
-.stat {
-  padding: 14px;
-  min-height: 96px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.stat > span {
-  color: var(--muted);
-  font-size: 11px;
-}
-.stat strong {
-  font-size: 24px;
-  line-height: 1.45;
-  font-weight: 700;
-}
-.stat strong.active {
-  color: var(--blue);
-}
-.stat strong.completed {
-  color: #238c75;
-}
-.stat strong.draft {
-  color: #c17822;
-}
-.stat strong.phase-number {
-  font-size: 17px;
-}
 .table-card {
   padding: 20px;
   min-width: 0;
@@ -1287,22 +1256,8 @@ details {
 .report-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  gap: 10px;
   margin: 22px 0;
-}
-.report-stats > div {
-  padding: 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.report-stats strong {
-  font-size: 22px;
-  color: var(--blue);
-}
-.report-stats small {
-  color: var(--muted);
 }
 .report-copy {
   line-height: 1.9;
@@ -1882,26 +1837,7 @@ details {
   border-radius: 12px;
 }
 
-/* Figma 01: four 127px KPI cards, 714:416 panels and data-driven monthly bars. */
-.overview-stats .stat,
-.workspace-metrics > .stat-grid .stat {
-  min-height: 127px;
-  padding: 18px 20px;
-  gap: 6px;
-}
-.overview-stats .stat strong,
-.workspace-metrics > .stat-grid .stat strong {
-  font-size: 30px;
-}
-.overview-stats .stat small {
-  color: var(--green);
-  font-size: 11px;
-}
-.overview-stats .stat .warning-text {
-  color: var(--amber);
-}
-.danger-text,
-.overview-stats .stat .danger-text {
+.danger-text {
   color: var(--red);
 }
 .overview-panels {
@@ -2226,33 +2162,6 @@ details {
   gap: 12px;
   margin-bottom: 10px;
 }
-.node-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  min-height: 74px;
-  padding: 12px;
-  border-radius: 11px;
-  margin-bottom: 0;
-  gap: 8px;
-}
-.node-stat > span {
-  font-size: 11px;
-  color: var(--muted);
-}
-.node-stat strong {
-  font-size: 23px;
-  color: var(--blue);
-}
-.node-stat strong.completed {
-  color: var(--green);
-}
-.node-stat strong.warning-text {
-  color: var(--amber);
-}
-.node-stat strong.danger-text {
-  color: var(--red);
-}
 .plan-readonly-note {
   font-size: 11px;
   margin: 4px 0 10px;
@@ -2574,17 +2483,10 @@ details {
   min-height: 36px;
   padding: 7px 10px;
 }
-.workspace-metrics > .stat-grid small {
-  color: var(--muted);
-  font-size: 11px;
-}
 .workspace-metrics > .stat-grid .text-button {
   min-height: 16px;
   line-height: 16px;
   font-size: 11px;
-}
-.workspace-metrics > .stat-grid .stat:last-child > strong {
-  color: var(--red);
 }
 .workspace-actions .workflow-split > .empty,
 .workspace-tasks .workflow-split > .empty {
@@ -2592,11 +2494,6 @@ details {
   padding: 40px 20px;
 }
 @media (max-width: 1200px) {
-  .overview-stats .stat,
-  .workspace-metrics > .stat-grid .stat {
-    padding: 16px;
-    min-height: 127px;
-  }
   .overview-trend,
   .overview-todos {
     padding: 16px;

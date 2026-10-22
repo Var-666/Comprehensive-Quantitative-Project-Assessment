@@ -8,6 +8,7 @@ import { api, errorMessage, json, versionHeader } from "../api";
 import { useCatalog } from "../store";
 import type { ActionTemplate, ActionItem } from "../workflowTypes";
 import Modal from "./Modal.vue";
+import { useUnsavedChanges } from "../useUnsavedChanges";
 import Icon from "./Icon.vue";
 const props = defineProps<{ template?: ActionTemplate; copy?: boolean }>();
 const emit = defineEmits<{ close: []; saved: [value: ActionTemplate] }>();
@@ -33,6 +34,11 @@ const form = reactive({
     materials: i.materials_required_json.join("\n"),
   })) || [{ ...blank(), materials: "" }],
 });
+const guard = useUnsavedChanges(
+  () => form,
+  () => true,
+  () => busy.value,
+);
 async function save() {
   busy.value = true;
   error.value = "";
@@ -63,6 +69,7 @@ async function save() {
         }),
       },
     );
+    guard.markSaved();
     emit("saved", result);
   } catch (e) {
     error.value = errorMessage(e);
@@ -73,6 +80,9 @@ async function save() {
 </script>
 <template>
   <Modal
+    class="form-drawer"
+    drawer
+    :before-close="guard.confirmDiscard"
     :title="
       copy ? '创建模板新版本' : template ? '编辑模板草稿' : '创建动作模板'
     "
@@ -197,8 +207,8 @@ async function save() {
         添加动作项
       </ElButton>
     </form>
-    <template #footer
-      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton form="template-form" :disabled="busy" native-type="submit">
         <Icon name="imgVectorSave" />保存草稿

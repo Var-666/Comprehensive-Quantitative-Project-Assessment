@@ -119,6 +119,20 @@
   height: 36px;
   min-width: 36px;
 }
+.el-message-box {
+  font-family: inherit;
+  border-radius: 12px;
+}
+.el-message-box__headerbtn {
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.el-message {
+  max-width: calc(100vw - 32px);
+  font-family: inherit;
+}
 .ui-modal-overlay {
   background: #17233838;
   overflow: hidden;
@@ -145,6 +159,39 @@
 }
 .modal.task-drawer {
   --ui-drawer-width: 600px;
+}
+.modal.form-drawer {
+  --ui-drawer-width: 690px;
+}
+.modal.form-drawer .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.modal-body {
+  overscroll-behavior: contain;
+}
+.import-workspace {
+  padding: 24px;
+}
+.import-footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+.llm-test-result {
+  padding: 20px;
+  margin-bottom: 16px;
+}
+@media (max-width: 760px) {
+  .modal.form-drawer .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .import-workspace {
+    padding: 16px;
+  }
 }
 .modal.metric-formula-drawer {
   --ui-drawer-width: 620px;

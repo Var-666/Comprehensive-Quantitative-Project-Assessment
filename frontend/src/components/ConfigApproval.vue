@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useUnsavedChanges } from "../useUnsavedChanges";
 import { ElButton } from "element-plus/es/components/button/index";
 import { ElInput } from "element-plus/es/components/input/index";
 import { computed, ref } from "vue";
@@ -19,6 +20,11 @@ const canReview = computed(
     auth.user?.memberships.some((m) =>
       ["admin", "reviewer"].includes(m.role_code),
     ) && !props.item.editor_ids.includes(auth.user?.user_id || ""),
+);
+const guard = useUnsavedChanges(
+  () => ({ basis: basis.value }),
+  () => !!action.value,
+  () => busy.value,
 );
 async function perform(kind: string) {
   busy.value = true;
@@ -99,6 +105,7 @@ async function perform(kind: string) {
   </p>
   <Modal
     v-if="action"
+    :before-close="guard.confirmDiscard"
     :title="action === 'retire' ? '停用配置' : '配置业务确认'"
     :busy="busy"
     @close="action = ''"
@@ -121,8 +128,8 @@ async function perform(kind: string) {
         />
       </label>
     </form>
-    <template #footer
-      ><ElButton :disabled="busy" @click="action = ''" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >取消</ElButton
       ><ElButton
         class="primary"

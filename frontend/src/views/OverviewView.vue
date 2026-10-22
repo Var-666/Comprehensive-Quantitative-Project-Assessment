@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { ElButton } from "element-plus/es/components/button/index";
+import StatCard from "../components/StatCard.vue";
+import {
+  OfficeBuilding,
+  DataLine,
+  Clock,
+  Warning,
+} from "@element-plus/icons-vue";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, errorMessage } from "../api";
@@ -85,26 +92,35 @@ onMounted(load);
     </p>
     <template v-else-if="summary && dashboard && !error">
       <div class="stat-grid overview-stats">
-        <div class="card stat">
-          <span>在管项目</span><strong>{{ summary.total }}</strong
-          ><small>已录入 {{ summary.milestones }} 个节点</small>
-        </div>
-        <div class="card stat">
-          <span>进行中项目</span><strong>{{ summary.active }}</strong
-          ><small>按当前项目状态统计</small>
-        </div>
-        <div class="card stat">
-          <span>近期待办</span><strong>{{ dashboard.pending_tasks }}</strong
-          ><small class="warning-text">当前尚未核实完成的任务</small>
-        </div>
-        <div class="card stat">
-          <span>异常节点</span
-          ><strong>{{
+        <StatCard
+          label="在管项目"
+          :value="summary.total"
+          :icon="OfficeBuilding"
+        >
+          已录入 {{ summary.milestones }} 个节点
+        </StatCard>
+        <StatCard label="进行中项目" :value="summary.active" :icon="DataLine">
+          按当前项目状态统计
+        </StatCard>
+        <StatCard
+          label="近期待办"
+          :value="dashboard.pending_tasks"
+          :icon="Clock"
+          tone="amber"
+        >
+          当前尚未核实完成的任务
+        </StatCard>
+        <StatCard
+          label="异常节点"
+          :value="
             dashboard.counts.late_completed +
             dashboard.counts.confirmed_overdue_unfinished
-          }}</strong
-          ><small class="danger-text">延期完成及已核实逾期未完成</small>
-        </div>
+          "
+          :icon="Warning"
+          tone="red"
+        >
+          延期完成及已核实逾期未完成
+        </StatCard>
       </div>
       <div class="overview-panels">
         <section class="card overview-trend" aria-labelledby="trend-title">

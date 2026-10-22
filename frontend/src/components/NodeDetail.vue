@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useUnsavedChanges } from "../useUnsavedChanges";
+import OperationToast from "./OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import { ElInput } from "element-plus/es/components/input/index";
 import FormSelect from "./FormSelect.vue";
@@ -42,6 +44,7 @@ async function cancelNode() {
       body: json({ reason: cancelReason.value }),
     });
     await load();
+    guard.markSaved(["cancelReason"]);
     success.value = "节点已取消，旧待发提醒已失效，历史保留";
     emit("changed");
   } catch (e) {
@@ -55,6 +58,11 @@ const form = reactive({
   actual_date: "",
   evidence_ref: "",
 });
+const guard = useUnsavedChanges(
+  () => ({ form, comment: comment.value, cancelReason: cancelReason.value }),
+  () => true,
+  () => busy.value,
+);
 async function load() {
   try {
     detail.value = await api<Milestone>(
@@ -82,6 +90,7 @@ async function submit() {
     });
     success.value = "实际记录已提交，仍需独立核实";
     form.evidence_ref = "";
+    guard.markSaved(["form"]);
     await load();
     emit("changed");
   } catch (e) {
@@ -105,6 +114,7 @@ async function verify(id: string, decision: string) {
     });
     success.value = "核实结果已记录";
     comment.value = "";
+    guard.markSaved(["comment"]);
     await load();
     emit("changed");
   } catch (e) {
@@ -117,6 +127,7 @@ onMounted(load);
 </script>
 <template>
   <Modal
+    :before-close="guard.confirmDiscard"
     :title="`${detail.milestone_code} · 节点详情`"
     :subtitle="detail.milestone_name"
     drawer
@@ -142,7 +153,7 @@ onMounted(load);
       </nav></template
     >
     <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-if="success" class="success" role="status">{{ success }}</p>
+    <OperationToast v-model="success" :busy="busy" />
     <section class="form-section" data-node-section="info">
       <h3>
         {{ detail.milestone_name }}
@@ -367,8 +378,8 @@ onMounted(load);
         }}</pre>
       </details>
     </section>
-    <template #footer
-      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+    <template #footer="{ close }"
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
         >关闭</ElButton
       ></template
     >
