@@ -46,6 +46,88 @@ export interface ActionLink {
   status: string;
   snapshot_json: ActionItem & { template_code: string; version_label: string };
 }
+export interface ActionMatching {
+  status:
+    | "tracking_only"
+    | "automatic"
+    | "manual"
+    | "conflict"
+    | "missing"
+    | "pending_approval"
+    | "needs_review";
+  label: string;
+  can_modify: boolean;
+  blocked_reason: string;
+  action_count: number;
+  candidate_count: number;
+  candidates?: (Pick<
+    ActionTemplate,
+    "id" | "title" | "template_code" | "version_label"
+  > & {
+    node_type_code: string;
+    applicability_json: { project_type?: string | null };
+    items: (ActionItem & { department_name?: string | null })[];
+  })[];
+  links?: (ActionLink & {
+    source: string;
+    department_name: string | null;
+    template_title: string;
+    applicable: boolean;
+  })[];
+}
+export const matchingLabels: Record<ActionMatching["status"], string> = {
+  tracking_only: "仅时间记录",
+  automatic: "已自动匹配",
+  manual: "已人工关联",
+  conflict: "候选待确认",
+  missing: "待配置动作",
+  pending_approval: "模板待批准",
+  needs_review: "原关联需复核",
+};
+export const configurationLabels = {
+  ready: "配置就绪",
+  actions_pending: "待关联标准动作",
+  actions_conflict: "待确认动作模板",
+  actions_approval: "动作模板待批准",
+  reminder_missing: "提醒规则待配置",
+  reminder_approval: "提醒规则待批准",
+  reminder_blocked: "提醒配置需完善",
+  source_missing: "计划依据待补充",
+  tracking_only: "仅时间记录",
+  inactive: "节点已停用",
+};
+export interface NodeConfiguration {
+  status: keyof typeof configurationLabels;
+  label: string;
+  ready: boolean;
+  tracking_only: boolean;
+  issues: string[];
+  next_step: string;
+  actions: ActionMatching;
+  reminders: {
+    status: string;
+    label: string;
+    rules: {
+      id: string;
+      rule_code: string;
+      version_label: string;
+      days_before: number;
+      day_basis: string;
+      recipient_role_code: string;
+      recipient_count: number;
+      calendar_label: string | null;
+      trigger_date: string | null;
+      reason: string;
+    }[];
+  };
+  plan: {
+    id: string;
+    version_label: string;
+    status: string;
+    can_approve: boolean;
+  };
+  can_configure_public: boolean;
+}
 export interface FactSnapshot {
   project_code: string;
   project_name: string;

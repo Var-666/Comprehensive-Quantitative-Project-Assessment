@@ -169,6 +169,9 @@ class PlanItem(Identity, Base):
     source_ref: Mapped[str | None] = mapped_column(String(500))
     change_reason: Mapped[str] = mapped_column(Text)
     is_included: Mapped[bool] = mapped_column(Boolean, default=True)
+    tracking_only: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false")
+    )
 
 
 class ActualRecord(Identity, Base):

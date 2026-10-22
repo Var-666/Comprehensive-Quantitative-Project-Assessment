@@ -52,8 +52,12 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await page.getByRole('button',{name:'提醒规则',exact:true}).click();
  await approveConfig(page,page.locator('.workflow-config').filter({hasText:'RR-BROWSER'}));
  await switchUser(page,'accept-editor');
- await page.getByRole('link',{name:'节点管理',exact:true}).click();
- await choose(page.getByLabel('所属项目'), {label:'P-H028 · 7500DWT 化学品船'});
+ const me=(await (await page.request.get('/api/v1/auth/me')).json()).data;
+ const project=(await (await page.request.get('/api/v1/projects?page_size=100')).json()).data.items.find(p=>p.project_code==='P-H028');
+ const draftResponse=await page.request.post(`/api/v1/projects/${project.id}/plan-versions`,{headers:{'X-CSRF-Token':me.csrf_token,'If-Match':String(project.row_version)},data:{change_reason:'浏览器验证：在草稿中配置标准动作'}});
+ expect(draftResponse.ok(),await draftResponse.text()).toBe(true);
+ const draft=(await draftResponse.json()).data;
+ await page.goto(`/milestones?project=${project.id}&plan=${draft.id}`);
  await expect(page.getByRole('combobox',{name:'计划版本',exact:true})).toBeEnabled();
  const row=page.getByRole('row').filter({hasText:'H028-N011'});
  while(await row.count()===0){
@@ -69,6 +73,14 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await d.getByRole('button',{name:'保存关联配置'}).click();
  await expect(page.getByRole('dialog')).toHaveCount(1);
  await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).last().click();
+ await switchUser(page,'accept-reviewer');
+ await page.goto(`/milestones?project=${project.id}&plan=${draft.id}`);
+ await page.getByRole('button',{name:'批准生效',exact:true}).click();
+ d=page.getByRole('dialog',{name:'批准计划生效',exact:true});
+ await d.getByLabel('批准依据 *',{exact:true}).fill('独立核对浏览器测试草稿及动作');
+ await d.getByRole('button',{name:'批准计划生效',exact:true}).click();
+ await expect(d).toHaveCount(0);
+ await switchUser(page,'accept-editor');
  await page.getByRole('link',{name:'提醒与待办',exact:true}).click();
  await page.getByRole('button',{name:'提醒扫描',exact:true}).click();
  await page.locator('.el-select').filter({has:page.getByRole('combobox',{name:'扫描项目 *',exact:true})}).click();
@@ -92,6 +104,9 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await page.getByRole('button',{name:'标记已读'}).click();
  await expect(page.getByText('已读',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'执行任务',exact:true}).click();
+ await choose(page.getByRole('combobox',{name:'筛选项目',exact:true}),{label:'P-H028 · 7500DWT 化学品船'});
+ await page.getByRole('button',{name:'查询工作',exact:true}).click();
+ await expect(page.locator('main .table-wrap tbody')).toContainText('浏览器整理资料');
  await page.getByRole('button',{name:'处理任务'}).first().click();
  d=page.getByRole('dialog');
  fs.mkdirSync(path.resolve('../docs/figma-ui/after'),{recursive:true});
@@ -111,6 +126,9 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await switchUser(page,'accept-reviewer');
  await page.goto('/tasks');
  await page.getByRole('button',{name:'执行任务',exact:true}).click();
+ await choose(page.getByRole('combobox',{name:'筛选项目',exact:true}),{label:'P-H028 · 7500DWT 化学品船'});
+ await page.getByRole('button',{name:'查询工作',exact:true}).click();
+ await expect(page.locator('main .table-wrap tbody')).toContainText('浏览器整理资料');
  await page.getByRole('button',{name:'处理任务'}).first().click();
  d=page.getByRole('dialog');
  await d.getByRole('button',{name:'执行反馈',exact:true}).click();

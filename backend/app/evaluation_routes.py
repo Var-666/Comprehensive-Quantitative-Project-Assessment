@@ -73,6 +73,12 @@ def collection(db, principal, as_of):
 
 
 def register(app, Db, ok):
+    @app.get("/api/v1/workbench/next-actions")
+    def next_actions(request: Request, db: Db):
+        from .workbench import next_actions
+
+        return ok(request, next_actions(db, request.state.principal))
+
     @app.get("/api/v1/metrics/dashboard")
     def dashboard(request: Request, db: Db, as_of: date = Query(..., ge=date(2, 1, 1))):
         """Read-only dashboard; all classifications reuse trial_v1 and existing project scopes."""

@@ -75,7 +75,7 @@ test('compact single-line milestone rows paginate ten records without losing fie
       cells: row.cells.length,
       singleLine: [...row.cells].every(cell => getComputedStyle(cell).whiteSpace === 'nowrap'),
     })));
-    expect(rows.every(row => row.cells === 8 && row.singleLine && row.height <= 48)).toBe(true);
+    expect(rows.every(row => row.cells === 9 && row.singleLine && row.height <= 48)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (width === 1223) {
       await table.scrollIntoViewIfNeeded();

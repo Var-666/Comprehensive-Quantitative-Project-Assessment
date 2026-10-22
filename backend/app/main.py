@@ -10,13 +10,22 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import String, cast, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import auth, auth_routes, evaluation_routes, imports, llm_routes, workflow_routes
+from . import (
+    action_matching,
+    auth,
+    auth_routes,
+    evaluation_routes,
+    imports,
+    node_configuration,
+    llm_routes,
+    workflow_routes,
+)
 from . import services as svc
 from .config import PENDING_RULES, settings
 from .db import get_db
@@ -37,6 +46,7 @@ from .schemas import (
     ActivateInput,
     ActualInput,
     CommitInput,
+    MilestoneCreate,
     MilestoneInput,
     PlanCreate,
     ProjectInput,
@@ -369,6 +379,7 @@ def milestones(
     type: str | None = None,
     department: str | None = None,
     changes_only: bool = False,
+    configuration_status: str | None = None,
 ):
     project = svc.get(db, Project, project_id)
     if not plan_version_id:
@@ -381,6 +392,8 @@ def milestones(
     if plan.project_id != project_id:
         svc.fail(422, "PLAN_PROJECT_MISMATCH", "版本不属于该项目")
     changes = svc.plan_changes(db, plan)
+    if configuration_status and configuration_status not in node_configuration.LABELS:
+        svc.fail(422, "INVALID_CONFIGURATION_STATUS", "配置状态无效")
     query = (
         select(Milestone)
         .join(PlanItem, Milestone.id == PlanItem.milestone_id)
@@ -398,18 +411,56 @@ def milestones(
     if department:
         query = query.where(PlanItem.department_id == department)
     total = db.scalar(select(func.count()).select_from(query.subquery()))
+    ordered = query.order_by(PlanItem.planned_date, Milestone.milestone_code)
     nodes = db.scalars(
-        query.order_by(PlanItem.planned_date, Milestone.milestone_code)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
+        ordered if configuration_status else ordered.offset((page - 1) * page_size).limit(page_size)
     ).all()
+    items = {
+        i.milestone_id: i
+        for i in db.scalars(
+            select(PlanItem).where(
+                PlanItem.id.in_(svc.plan_item_ids(plan.id)),
+                PlanItem.milestone_id.in_([n.id for n in nodes]),
+            )
+        )
+    }
+    matching_data = action_matching.catalog(db, [i.id for i in items.values()])
+    configuration_data = node_configuration.catalog(db, project.id)
+    roles = auth.role(db, request.state.principal, project.id)
+    states = {}
+    for node in nodes:
+        state = action_matching.describe(
+            project,
+            plan,
+            items[node.id],
+            node,
+            request.state.principal,
+            roles,
+            matching_data,
+        )
+        matching = {
+            key: value for key, value in state.items() if key not in ("candidates", "links")
+        }
+        configuration = node_configuration.describe(
+            db, project, plan, items[node.id], node, matching, configuration_data
+        )
+        states[node.id] = (matching, configuration)
+    if configuration_status:
+        nodes = [n for n in nodes if states[n.id][1]["status"] == configuration_status]
+        total = len(nodes)
+        nodes = nodes[(page - 1) * page_size : page * page_size]
+    details = []
+    for node in nodes:
+        detail = svc.milestone_detail(db, node, plan_version_id, changes)
+        detail["action_matching"], detail["configuration"] = states[node.id]
+        details.append(detail)
     return ok(
         request,
         {
             "total": total,
             "page": page,
             "page_size": page_size,
-            "items": [svc.milestone_detail(db, n, plan_version_id, changes) for n in nodes],
+            "items": details,
             "change_total": len(changes),
             "plan_total": db.scalar(
                 select(func.count())
@@ -421,29 +472,41 @@ def milestones(
 
 
 @app.post("/api/v1/projects/{project_id}/milestones", status_code=201)
-def new_milestone(request: Request, project_id: str, data: MilestoneInput, db: Db):
+def new_milestone(request: Request, project_id: str, data: MilestoneCreate, db: Db):
     node = svc.create_milestone(db, project_id, data, request.state.request_id)
+    detail = svc.milestone_detail(db, node, data.plan_version_id)
+    detail["configuration"] = node_configuration.for_node(db, node, data.plan_version_id)
+    detail["action_matching"] = detail["configuration"]["actions"]
     db.commit()
-    return ok(request, svc.milestone_detail(db, node, data.plan_version_id))
+    return ok(request, detail)
 
 
 @app.get("/api/v1/milestones/{milestone_id}")
 def milestone(request: Request, milestone_id: str, db: Db, plan_version_id: str | None = None):
     result = svc.milestone_detail(db, svc.get(db, Milestone, milestone_id), plan_version_id)
+    result["configuration"] = node_configuration.for_node(
+        db, svc.get(db, Milestone, milestone_id), result["plan_item"]["plan_version_id"]
+    )
+    result["action_matching"] = result["configuration"]["actions"]
     result["history"] = [
-        svc.record(p)
-        for p in db.scalars(
-            select(PlanItem)
+        {**svc.record(p), "version_label": label, "version_status": status}
+        for p, label, status in db.execute(
+            select(PlanItem, PlanVersion.version_label, PlanVersion.status)
+            .join(PlanVersion, PlanItem.plan_version_id == PlanVersion.id)
             .where(PlanItem.milestone_id == milestone_id)
-            .order_by(PlanItem.plan_version_id)
+            .order_by(PlanVersion.created_at.desc(), PlanVersion.version_label.desc())
         )
     ]
     item_ids = [p["id"] for p in result["history"]]
     actual_ids = [p["id"] for p in result["actual_records"]]
     result["audit_events"] = [
-        svc.record(e)
-        for e in db.scalars(
-            select(AuditEvent)
+        {
+            **svc.record(e),
+            "actor_name": name or ("系统" if e.actor_id == "system" else "历史操作人未记录"),
+        }
+        for e, name in db.execute(
+            select(AuditEvent, User.display_name)
+            .outerjoin(User, AuditEvent.actor_id == cast(User.id, String))
             .where(AuditEvent.aggregate_id.in_([milestone_id, *item_ids, *actual_ids]))
             .order_by(AuditEvent.occurred_at.desc())
         )
@@ -457,7 +520,10 @@ def edit_node(
 ):
     node = svc.update_milestone(db, milestone_id, data, if_match, request.state.request_id)
     db.commit()
-    return ok(request, svc.milestone_detail(db, node, data.plan_version_id))
+    detail = svc.milestone_detail(db, node, data.plan_version_id)
+    detail["action_matching"] = action_matching.for_node(db, node, data.plan_version_id)
+    detail["configuration"] = node_configuration.for_node(db, node, data.plan_version_id)
+    return ok(request, detail)
 
 
 @app.post("/api/v1/milestones/{milestone_id}/actuals", status_code=201)

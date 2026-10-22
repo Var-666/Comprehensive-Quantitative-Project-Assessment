@@ -50,6 +50,7 @@ const mapping = ref<Record<string, string>>(
         department_name: "责任部门",
         owner_name: "责任人",
         source_ref: "日期依据",
+        tracking_only: "",
       }
     : {
         project_code: "项目编号",
@@ -63,6 +64,16 @@ const mapping = ref<Record<string, string>>(
       },
 );
 const committed = computed(() => !!batch.value?.result_json);
+const matchingSummary = computed(
+  () =>
+    batch.value?.result_json?.matching_summary || batch.value?.matching_summary,
+);
+const matchingResults = computed(
+  () =>
+    new Map(
+      batch.value?.result_json?.node_results?.map((r) => [r.milestone_id, r]),
+    ),
+);
 const guard = useUnsavedChanges(
   () => ({
     file: file.value
@@ -242,7 +253,13 @@ async function commit() {
             </thead>
             <tbody>
               <tr v-for="(_, field) in mapping" :key="field">
-                <td>{{ field }}</td>
+                <td>
+                  {{
+                    field === "tracking_only"
+                      ? "仅时间记录（选填；是/否）"
+                      : field
+                  }}
+                </td>
                 <td>
                   <ElInput
                     v-model="mapping[field]"
@@ -263,6 +280,18 @@ async function commit() {
             : `校验完成：合法 ${batch.valid_rows} 行，错误/重复 ${batch.error_rows} 行。尚未写入业务数据。`
         }}
       </p>
+      <p
+        v-if="matchingSummary"
+        class="notice import-matching-summary"
+        role="status"
+      >
+        {{ committed ? "已自动关联" : "可自动匹配" }}
+        {{ matchingSummary.automatic }} 个； 待人工选择
+        {{ matchingSummary.conflict }} 个； 暂无适用模板
+        {{ matchingSummary.missing }} 个； 模板待批准
+        {{ matchingSummary.pending_approval }} 个； 仅时间记录
+        {{ matchingSummary.tracking_only }} 个。
+      </p>
       <p class="muted">批次 {{ batch.id }} · {{ batch.filename }}</p>
       <div class="table-wrap preview-table">
         <table>
@@ -272,6 +301,8 @@ async function commit() {
               <th>数据预览</th>
               <th>状态</th>
               <th>失败原因</th>
+              <th v-if="committed && target === 'milestones'">动作配置结果</th>
+              <th v-if="committed && target === 'milestones'">配置状态</th>
             </tr>
           </thead>
           <tbody>
@@ -287,6 +318,25 @@ async function commit() {
                 <p v-for="(err, i) in row.validation_errors_json" :key="i">
                   {{ err.field }} · {{ err.message }}
                 </p>
+              </td>
+              <td v-if="committed && target === 'milestones'">
+                {{
+                  matchingResults.get(row.target_record_id || "")?.label ||
+                  "待检查"
+                }}
+              </td>
+              <td
+                v-if="committed && target === 'milestones'"
+                :title="
+                  matchingResults
+                    .get(row.target_record_id || '')
+                    ?.issues?.join('；')
+                "
+              >
+                {{
+                  matchingResults.get(row.target_record_id || "")
+                    ?.configuration_label || "待检查"
+                }}
               </td>
             </tr>
           </tbody>

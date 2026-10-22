@@ -30,7 +30,7 @@ test('plan delta highlights the changed date and reason while inherited nodes re
   const editor = page.getByRole('dialog', { name: '编辑节点计划草稿', exact: true });
   await editor.getByLabel('计划完成日期 *', { exact: true }).fill(newDate);
   await editor.getByLabel('计划完成日期 *', { exact: true }).press('Tab');
-  await editor.getByLabel('录入 / 变更原因 *', { exact: true }).fill('连续降雨，后延两天');
+  await editor.getByLabel('变更原因 *', { exact: true }).fill('连续降雨，后延两天');
   await editor.getByRole('button', { name: '保存节点', exact: true }).click();
   await expect(editor).toHaveCount(0);
   await onlyChanges.setChecked(true);

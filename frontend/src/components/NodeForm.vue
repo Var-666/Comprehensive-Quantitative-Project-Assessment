@@ -4,6 +4,7 @@ import FormSelect from "./FormSelect.vue";
 import { ElOption } from "element-plus/es/components/select/index";
 import FormDate from "./FormDate.vue";
 import { ElButton } from "element-plus/es/components/button/index";
+import { ElCheckbox } from "element-plus/es/components/checkbox/index";
 import { onMounted, reactive, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useCatalog } from "../store";
@@ -11,7 +12,7 @@ import type { Milestone, Plan, Project } from "../types";
 import Modal from "./Modal.vue";
 import { useUnsavedChanges } from "../useUnsavedChanges";
 const props = defineProps<{ project: Project; plan: Plan; node?: Milestone }>();
-const emit = defineEmits<{ close: []; saved: [] }>();
+const emit = defineEmits<{ close: []; saved: [node: Milestone] }>();
 const catalog = useCatalog(),
   busy = ref(false),
   error = ref("");
@@ -25,6 +26,7 @@ const form = reactive({
   owner_id: props.node?.plan_item.owner_id || "",
   source_ref: props.node?.plan_item.source_ref || "",
   change_reason: "",
+  tracking_only: props.node?.plan_item.tracking_only || false,
 });
 const guard = useUnsavedChanges(
   () => form,
@@ -42,7 +44,8 @@ async function save() {
   busy.value = true;
   error.value = "";
   try {
-    await api(
+    const { milestone_code, change_reason, ...values } = form;
+    const node = await api<Milestone>(
       props.node
         ? `/milestones/${props.node.id}/plan-item`
         : `/projects/${props.project.id}/milestones`,
@@ -50,7 +53,9 @@ async function save() {
         method: props.node ? "PATCH" : "POST",
         headers: props.node ? versionHeader(props.node.row_version) : {},
         body: json({
-          ...form,
+          ...values,
+          ...(props.node || milestone_code.trim() ? { milestone_code } : {}),
+          ...(props.node ? { change_reason } : {}),
           plan_version_id: props.plan.id,
           department_id: form.department_id || null,
           owner_id: form.owner_id || null,
@@ -58,7 +63,7 @@ async function save() {
       },
     );
     guard.markSaved();
-    emit("saved");
+    emit("saved", node);
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -86,12 +91,13 @@ async function save() {
         <h3>节点基本信息</h3>
         <div class="form-grid">
           <label
-            >节点编号 *<ElInput
+            >节点编号<ElInput
               v-model="form.milestone_code"
-              required
+              :required="!!node"
+              :placeholder="node ? '' : '自动生成（可手动填写）'"
               maxlength="64"
               :readonly="!!node"
-              :aria-label="'节点编号 *'" /></label
+              :aria-label="'节点编号'" /></label
           ><label
             >节点名称 *<ElInput
               v-model="form.milestone_name"
@@ -171,14 +177,17 @@ async function save() {
               :aria-label="'日期依据说明'"
           /></label>
         </div>
-        <label
-          >录入 / 变更原因 *<ElInput
+        <ElCheckbox v-model="form.tracking_only">
+          仅进行节点计划及完成情况跟踪，不需要标准动作
+        </ElCheckbox>
+        <label v-if="node"
+          >变更原因 *<ElInput
             v-model="form.change_reason"
             required
             maxlength="2000"
             :rows="2"
             type="textarea"
-            :aria-label="'录入 / 变更原因 *'"
+            :aria-label="'变更原因 *'"
           />
         </label>
       </section>

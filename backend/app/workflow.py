@@ -199,7 +199,7 @@ def retire_config(db, obj, reason, request_id, permission=True):
     audit(db, obj, "retire_configuration", request_id, before)
 
 
-def link_actions(db, node, data, request_id):
+def link_actions(db, node, data, request_id, *, source="manual"):
     project = get(db, Project, node.project_id, True)
     if project.project_status in ("archived", "completed") or node.lifecycle_status != "active":
         fail(409, "PROJECT_OR_NODE_INACTIVE", "已关闭项目或取消节点不能配置动作")
@@ -215,14 +215,16 @@ def link_actions(db, node, data, request_id):
         ),
     )
     selected = plan_item(db, plan.id, node.id)
+    if selected and selected.tracking_only:
+        fail(409, "TRACKING_ONLY", "此节点仅跟踪计划及完成情况，无需关联标准动作")
     if (
         plan.project_id != node.project_id
         or not selected
         or selected.id != item.id
         or not item.is_included
-        or plan.status == "superseded"
+        or plan.status != "draft"
     ):
-        fail(422, "INVALID_PLAN_ITEM", "请选择节点当前计划或草稿快照")
+        fail(422, "INVALID_PLAN_ITEM", "请选择节点的草稿计划快照")
     existing_ids = set(
         db.scalars(
             select(ActionLink.template_item_id).where(
@@ -240,7 +242,7 @@ def link_actions(db, node, data, request_id):
     links = []
     for key in dict.fromkeys(data.template_item_ids):
         action = get(db, ActionItem, key)
-        template = get(db, ActionTemplate, action.template_version_id)
+        template = get(db, ActionTemplate, action.template_version_id, True)
         if not applicable(template, item, project):
             fail(409, "TEMPLATE_NOT_APPLICABLE", "需要已批准且匹配节点类型/项目类型的模板")
         existing = db.scalar(
@@ -262,24 +264,31 @@ def link_actions(db, node, data, request_id):
                 **record(action),
                 "template_code": template.template_code,
                 "version_label": template.version_label,
+                "template_title": template.title,
+                "link_source": source,
             },
             created_by=db.info["actor_id"],
         )
         db.add(obj)
-        audit(db, obj, "link_action", request_id)
+        audit(
+            db,
+            obj,
+            "auto_link_action" if source.startswith("automatic_") else "link_action",
+            request_id,
+        )
         links.append(obj)
     project.row_version += 1
     return links
 
 
 def applicable(template, item, project):
-    return (
-        template.status == "approved"
-        and template.node_type_code == item.node_type_code
-        and (
-            not template.applicability_json.get("project_type")
-            or template.applicability_json["project_type"] == project.project_type
-        )
+    return template.status == "approved" and scope_applies(template, item, project)
+
+
+def scope_applies(template, item, project):
+    return template.node_type_code == item.node_type_code and (
+        not template.applicability_json.get("project_type")
+        or template.applicability_json["project_type"] == project.project_type
     )
 
 
@@ -290,6 +299,18 @@ def trigger_date(db, planned, days, basis, calendar_id):
         except OverflowError:
             return None, "DATE_OUT_OF_RANGE"
     calendar = get(db, WorkCalendar, calendar_id) if calendar_id else None
+    workdays = (
+        {
+            d.calendar_date: d.is_workday
+            for d in db.scalars(select(CalendarDay).where(CalendarDay.calendar_id == calendar.id))
+        }
+        if calendar
+        else {}
+    )
+    return calendar_trigger(calendar, workdays, planned, days)
+
+
+def calendar_trigger(calendar, workdays, planned, days):
     if (
         not calendar
         or calendar.status != "approved"
@@ -298,10 +319,6 @@ def trigger_date(db, planned, days, basis, calendar_id):
         return None, "CALENDAR_NOT_APPROVED"
     if not calendar.start_date <= planned <= calendar.end_date:
         return None, "CALENDAR_OUT_OF_RANGE"
-    workdays = {
-        d.calendar_date: d.is_workday
-        for d in db.scalars(select(CalendarDay).where(CalendarDay.calendar_id == calendar.id))
-    }
     current = planned
     while days:
         if current <= calendar.start_date:
@@ -389,7 +406,9 @@ def scan_project(db, project, as_of, request_id=None, generate=False):
             "eligible": False,
         }
         reason = None
-        if node.lifecycle_status != "active":
+        if item.tracking_only:
+            reason = "TRACKING_ONLY"
+        elif node.lifecycle_status != "active":
             reason = "MILESTONE_CANCELLED"
         elif db.scalar(
             select(ActualRecord.id).where(
@@ -604,7 +623,7 @@ def live_notice(db, notice):
         fail(409, "RECIPIENT_UNAVAILABLE", "接收人未授权或已禁用")
     for action in notice.fact_snapshot_json["actions"]:
         template = get(db, ActionTemplate, get(db, ActionItem, action["id"]).template_version_id)
-        if template.status != "approved":
+        if not applicable(template, item, project):
             fail(409, "CONFIGURATION_PENDING", "通知引用的动作模板已停用，请使用新版重新生成")
 
 
@@ -623,7 +642,7 @@ def live_task(db, task):
         or not current_plan_item(db, project, item)
         or project.project_status in ("archived", "completed")
         or node.lifecycle_status != "active"
-        or template.status != "approved"
+        or not applicable(template, item, project)
     ):
         fail(409, "SOURCE_INVALIDATED", "任务来源已改变；保留历史，请取消旧任务并按新版本重新分派")
 

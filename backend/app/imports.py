@@ -6,6 +6,7 @@ import json
 from datetime import date, datetime
 from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
+from types import SimpleNamespace
 
 from fastapi import HTTPException
 from openpyxl import load_workbook
@@ -20,12 +21,16 @@ from .models import (
     ImportBatch,
     ImportRow,
     Milestone,
+    PlanItem,
     PlanVersion,
     Project,
     User,
     now,
 )
 from .schemas import MilestoneInput, ProjectInput
+from . import action_matching, node_configuration
+from . import workflow as wf
+from .workflow_models import ActionTemplate
 from .services import audit, create_milestone, create_project, fail, get, record
 
 PROJECT_MAPPING = {
@@ -108,6 +113,10 @@ def normalize(db, target, raw, context):
         else "internal_plan",
         change_reason="Excel导入草稿",
     )
+    if values.get("tracking_only") in (None, "", "否"):
+        values["tracking_only"] = False
+    elif values.get("tracking_only") == "是":
+        values["tracking_only"] = True
     return MilestoneInput.model_validate(values)
 
 
@@ -151,7 +160,8 @@ def preview(db, content, filename, target, mapping, sheet_name, header_row, cont
             if target == "projects"
             else {"milestone_code", "milestone_name", "node_type_code", "planned_date"}
         )
-        if not required.issubset(mapping) or not set(mapping).issubset(defaults):
+        allowed = set(defaults) | ({"tracking_only"} if target == "milestones" else set())
+        if not required.issubset(mapping) or not set(mapping).issubset(allowed):
             fail(422, "INVALID_MAPPING", "字段映射缺少必填字段或含未知字段")
         headers = [
             str(c.value or "").strip()
@@ -253,6 +263,37 @@ def batch_detail(db, batch):
     result["rows"] = [record(r) for r in rows]
     result["valid_rows"] = sum(r.row_status == "valid" for r in rows)
     result["error_rows"] = sum(r.row_status in ("error", "duplicate") for r in rows)
+    if batch.target_entity == "milestones" and not batch.result_json:
+        project = get(db, Project, batch.context_json["project_id"])
+        templates = list(db.scalars(select(ActionTemplate)))
+        summary = {
+            "automatic": 0,
+            "conflict": 0,
+            "missing": 0,
+            "pending_approval": 0,
+            "tracking_only": 0,
+        }
+        for row in rows:
+            if row.row_status != "valid":
+                continue
+            item = SimpleNamespace(**row.normalized_json)
+            candidates = [t for t in templates if wf.applicable(t, item, project)]
+            state = (
+                "tracking_only"
+                if getattr(item, "tracking_only", False)
+                else "conflict"
+                if len(candidates) > 1
+                else "automatic"
+                if candidates
+                else "pending_approval"
+                if any(
+                    t.status in ("draft", "pending_review") and wf.scope_applies(t, item, project)
+                    for t in templates
+                )
+                else "missing"
+            )
+            summary[state] += 1
+        result["matching_summary"] = summary
     result["attempts"] = [
         record(e)
         for e in db.scalars(
@@ -303,18 +344,77 @@ def commit(db, batch_id, data, key, request_id):
         )
     if not valid:
         fail(409, "NO_VALID_ROWS", "没有合法数据可提交")
+    matching_summary = {
+        "automatic": 0,
+        "conflict": 0,
+        "missing": 0,
+        "pending_approval": 0,
+        "tracking_only": 0,
+    }
+    node_results, created_nodes = [], []
     for row, obj in valid:
         target = (
             create_project(db, obj, request_id, "excel_demo")
             if batch.target_entity == "projects"
-            else create_milestone(db, batch.context_json["project_id"], obj, request_id)
+            else create_milestone(
+                db,
+                batch.context_json["project_id"],
+                obj,
+                request_id,
+                matching_source="automatic_excel_import",
+            )
         )
         row.row_status = "inserted"
         row.target_record_id = target.id
+        if batch.target_entity == "milestones":
+            created_nodes.append(target)
+    if created_nodes:
+        project = get(db, Project, batch.context_json["project_id"])
+        plan = get(db, PlanVersion, batch.context_json["plan_version_id"])
+        items = {
+            i.milestone_id: i
+            for i in db.scalars(
+                select(PlanItem).where(
+                    PlanItem.plan_version_id == plan.id,
+                    PlanItem.milestone_id.in_([n.id for n in created_nodes]),
+                )
+            )
+        }
+        matching_data = action_matching.catalog(db, [i.id for i in items.values()])
+        configuration_data = node_configuration.catalog(db, project.id)
+        for target in created_nodes:
+            item = items[target.id]
+            state = action_matching.describe(
+                project,
+                plan,
+                item,
+                target,
+                db.info["principal"],
+                configuration_data["roles"],
+                matching_data,
+            )
+            configuration = node_configuration.describe(
+                db, project, plan, item, target, state, configuration_data
+            )
+            matching_summary[state["status"]] += 1
+            node_results.append(
+                {
+                    "milestone_id": target.id,
+                    "milestone_code": target.milestone_code,
+                    "status": state["status"],
+                    "label": state["label"],
+                    "action_count": state["action_count"],
+                    "configuration_status": configuration["status"],
+                    "configuration_label": configuration["label"],
+                    "issues": configuration["issues"],
+                }
+            )
     batch.idempotency_key = key
     batch.commit_payload_hash = payload_hash
     batch.committed_at = now()
     batch.status = "committed" if len(valid) == len(rows) else "partial"
     batch.result_json = {"inserted": len(valid), "skipped": len(rows) - len(valid)}
+    if batch.target_entity == "milestones":
+        batch.result_json.update(matching_summary=matching_summary, node_results=node_results)
     audit(db, batch, "commit", request_id)
     return batch

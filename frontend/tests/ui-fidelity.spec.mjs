@@ -161,7 +161,7 @@ test('forms and drawers remain inside the viewport and cancel preserves data',as
     dialog=page.getByRole('dialog');await contained(dialog);
     await page.screenshot({path:path.join(evidenceRoot,`node-drawer-${width}.png`)});
     await dialog.getByRole('button',{name:'变更历史',exact:true}).click();
-    await expect(dialog.getByRole('heading',{name:'计划历史快照',exact:true})).toBeVisible();
+    await expect(dialog.getByRole('heading',{name:'计划版本记录',exact:true})).toBeVisible();
     expect(await dialog.locator('.modal-body').evaluate(e=>e.scrollTop)).toBeGreaterThan(0);
     await dialog.getByRole('button',{name:'节点信息',exact:true}).click();
     await expect(dialog.locator('[data-node-section="info"]').getByText('计划日期',{exact:true})).toBeVisible();

@@ -5,6 +5,7 @@ import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "../components/FormSelect.vue";
 import { ElOption } from "element-plus/es/components/select/index";
 import { onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import { api, errorMessage } from "../api";
 import type { ActionTemplate } from "../workflowTypes";
 import { label } from "../workflowTypes";
@@ -16,7 +17,11 @@ import RuleCalendarPanel from "../components/RuleCalendarPanel.vue";
 import Icon from "../components/Icon.vue";
 const auth = useAuth(),
   catalog = useCatalog(),
-  tab = ref("templates"),
+  tab = ref(
+    ["rules", "calendars"].includes(String(useRoute().query.tab))
+      ? String(useRoute().query.tab)
+      : "templates",
+  ),
   busy = ref(false),
   error = ref(""),
   success = ref(""),

@@ -1,3 +1,5 @@
+import type { ActionMatching, NodeConfiguration } from "./workflowTypes";
+
 export interface Project {
   id: string;
   project_code: string;
@@ -40,6 +42,7 @@ export interface PlanItem {
   owner_id: string | null;
   source_ref: string | null;
   change_reason: string;
+  tracking_only: boolean;
 }
 export interface Actual {
   id: string;
@@ -65,6 +68,8 @@ export interface Milestone {
   actual_records: Actual[];
   current_actual: Actual | null;
   verification_status: string;
+  action_matching?: ActionMatching;
+  configuration?: NodeConfiguration;
   plan_change?: {
     kind: "added" | "changed" | "removed";
     old_date: string | null;
@@ -73,16 +78,17 @@ export interface Milestone {
     fields: string[];
     reason: string;
   } | null;
-  history?: PlanItem[];
+  history?: (PlanItem & { version_label: string; version_status: string })[];
   audit_events?: Audit[];
 }
 export interface Audit {
   id: string;
   action: string;
   actor_id: string;
+  actor_name?: string;
   occurred_at: string;
   before_json: Record<string, unknown> | null;
-  after_json: Record<string, unknown>;
+  after_json: Record<string, unknown> | null;
 }
 export interface Page<T> {
   items: T[];
@@ -97,6 +103,7 @@ export interface ImportRow {
   raw_json: Record<string, unknown>;
   normalized_json: Record<string, unknown> | null;
   row_status: string;
+  target_record_id?: string | null;
   validation_errors_json: { field: string; message: string; code: string }[];
 }
 export interface Batch {
@@ -107,7 +114,22 @@ export interface Batch {
   valid_rows: number;
   error_rows: number;
   rows: ImportRow[];
-  result_json: { inserted: number; skipped: number } | null;
+  matching_summary?: Record<string, number>;
+  result_json: {
+    inserted: number;
+    skipped: number;
+    matching_summary?: Record<string, number>;
+    node_results?: {
+      milestone_id: string;
+      milestone_code: string;
+      status: string;
+      label: string;
+      action_count: number;
+      configuration_status: string;
+      configuration_label: string;
+      issues: string[];
+    }[];
+  } | null;
 }
 export const statuses: Record<string, string> = {
   draft: "草稿",

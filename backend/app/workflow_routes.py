@@ -56,6 +56,19 @@ def page_query(db, query, page, page_size):
 
 
 def register(app, Db, ok):
+    @app.get("/api/v1/milestones/{milestone_id}/configuration-check")
+    def configuration_check(request: Request, milestone_id: str, plan_version_id: str, db: Db):
+        from .node_configuration import for_node
+
+        return ok(request, for_node(db, svc.get(db, Milestone, milestone_id), plan_version_id))
+
+    @app.get("/api/v1/milestones/{milestone_id}/action-matching")
+    def action_matching(request: Request, milestone_id: str, plan_version_id: str, db: Db):
+        from .action_matching import for_node
+
+        node = svc.get(db, Milestone, milestone_id)
+        return ok(request, for_node(db, node, plan_version_id))
+
     @app.post("/api/v1/milestones/{milestone_id}/cancel")
     def cancel_node(
         request: Request, milestone_id: str, data: CancelInput, db: Db, if_match: str = Header()

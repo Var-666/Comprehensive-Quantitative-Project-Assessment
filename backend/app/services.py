@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -18,7 +19,7 @@ from .models import (
     User,
     now,
 )
-from .schemas import MilestoneInput, ProjectInput
+from .schemas import MilestoneCreate, MilestoneInput, ProjectInput
 
 
 def fail(status, code, message, fields=None):
@@ -57,29 +58,46 @@ def match(obj, version):
         fail(409, "STALE_VERSION", "记录已更新，请刷新后重试")
 
 
-def plan_item_ids(plan_id):
+def plan_item_refs(plan_ids):
     """Nearest node patch wins; exclusions also override inherited rows."""
     lineage = (
-        select(PlanVersion.id, PlanVersion.base_version_id, literal(0).label("depth"))
-        .where(PlanVersion.id == plan_id)
+        select(
+            PlanVersion.id.label("view_plan_id"),
+            PlanVersion.id,
+            PlanVersion.base_version_id,
+            literal(0).label("depth"),
+        )
+        .where(PlanVersion.id.in_(plan_ids))
         .cte(recursive=True)
     )
     lineage = lineage.union_all(
         select(
-            PlanVersion.id, PlanVersion.base_version_id, (lineage.c.depth + 1).label("depth")
+            lineage.c.view_plan_id,
+            PlanVersion.id,
+            PlanVersion.base_version_id,
+            (lineage.c.depth + 1).label("depth"),
         ).join(lineage, PlanVersion.id == lineage.c.base_version_id)
     )
     ranked = (
         select(
+            lineage.c.view_plan_id,
             PlanItem.id,
             func.row_number()
-            .over(partition_by=PlanItem.milestone_id, order_by=lineage.c.depth)
+            .over(
+                partition_by=(lineage.c.view_plan_id, PlanItem.milestone_id),
+                order_by=lineage.c.depth,
+            )
             .label("priority"),
         )
         .join(lineage, PlanItem.plan_version_id == lineage.c.id)
         .subquery()
     )
-    return select(ranked.c.id).where(ranked.c.priority == 1)
+    return select(ranked.c.view_plan_id, ranked.c.id).where(ranked.c.priority == 1).subquery()
+
+
+def plan_item_ids(plan_id):
+    refs = plan_item_refs([plan_id])
+    return select(refs.c.id)
 
 
 def plan_item(db, plan_id, milestone_id):
@@ -106,7 +124,8 @@ def current_plan_item(db, project, item):
 def materialize_plan_item(db, item, plan_id):
     if item.plan_version_id == plan_id:
         return item
-    from .workflow_models import ActionLink
+    from .workflow import applicable
+    from .workflow_models import ActionItem, ActionLink, ActionTemplate
 
     copied = PlanItem(
         **{
@@ -118,11 +137,16 @@ def materialize_plan_item(db, item, plan_id):
     )
     db.add(copied)
     db.flush()
+    node = get(db, Milestone, item.milestone_id)
+    project = get(db, Project, node.project_id)
     for link in db.scalars(
         select(ActionLink).where(
             ActionLink.plan_item_id == item.id, ActionLink.status.in_(["active", "superseded"])
         )
     ):
+        template = get(
+            db, ActionTemplate, get(db, ActionItem, link.template_item_id).template_version_id
+        )
         db.add(
             ActionLink(
                 milestone_id=link.milestone_id,
@@ -131,6 +155,7 @@ def materialize_plan_item(db, item, plan_id):
                 assigned_department_id=link.assigned_department_id,
                 snapshot_json=link.snapshot_json,
                 created_by=db.info.get("actor_id", "system"),
+                status="active" if applicable(template, copied, project) else "superseded",
             )
         )
     db.flush()
@@ -170,6 +195,7 @@ def plan_changes(db, plan):
         "owner_id",
         "source_ref",
         "is_included",
+        "tracking_only",
         "change_reason",
     )
     changes = {}
@@ -345,18 +371,43 @@ def draft_plan(db, plan_id, project_id):
     return plan
 
 
-def create_milestone(db, project_id, data: MilestoneInput, request_id):
+def next_milestone_code(db, project_id):
+    # create_milestone holds the project lock until the node transaction commits.
+    codes = db.scalars(select(Milestone.milestone_code).where(Milestone.project_id == project_id))
+    sequence = (
+        max(
+            (int(m.group(1)) for code in codes if (m := re.search(r"-N([0-9]+)$", code))),
+            default=0,
+        )
+        + 1
+    )
+    suffix = f"-N{sequence:03d}"
+    if len(suffix) >= 64:
+        fail(422, "MILESTONE_SEQUENCE_EXHAUSTED", "自动编号超出长度限制，请手动填写节点编号")
+    prefix = get(db, Project, project_id).project_code.removeprefix("P-")
+    return f"{(prefix or 'NODE')[: 64 - len(suffix)]}{suffix}"
+
+
+def create_milestone(
+    db,
+    project_id,
+    data: MilestoneInput | MilestoneCreate,
+    request_id,
+    *,
+    matching_source="automatic_node_create",
+):
     draft_plan(db, data.plan_version_id, project_id)
     refs(db, data)
+    milestone_code = data.milestone_code or next_milestone_code(db, project_id)
     if db.scalar(
         select(Milestone.id).where(
-            Milestone.project_id == project_id, Milestone.milestone_code == data.milestone_code
+            Milestone.project_id == project_id, Milestone.milestone_code == milestone_code
         )
     ):
         fail(409, "MILESTONE_CODE_EXISTS", "该项目下节点编号已存在，禁止覆盖")
     node = Milestone(
         project_id=project_id,
-        milestone_code=data.milestone_code,
+        milestone_code=milestone_code,
         milestone_name=data.milestone_name,
         node_type_code=data.node_type_code,
     )
@@ -365,6 +416,11 @@ def create_milestone(db, project_id, data: MilestoneInput, request_id):
     values = data.model_dump(exclude={"milestone_code"})
     db.add(PlanItem(milestone_id=node.id, **values))
     audit(db, node, "create", request_id)
+    # Historical seed loading has no principal and must not backfill associations.
+    if db.info.get("principal"):
+        from .action_matching import automatically_link
+
+        automatically_link(db, node, data.plan_version_id, request_id, matching_source)
     return node
 
 
@@ -385,6 +441,23 @@ def update_milestone(db, node_id, data, version, request_id):
     item = materialize_plan_item(db, item, data.plan_version_id)
     for key, value in values.items():
         setattr(item, key, value)
+    if before["node_type_code"] != item.node_type_code:
+        from .workflow import applicable
+        from .workflow_models import ActionItem, ActionLink, ActionTemplate
+
+        project = get(db, Project, node.project_id)
+        for link in db.scalars(
+            select(ActionLink).where(
+                ActionLink.plan_item_id == item.id, ActionLink.status == "active"
+            )
+        ):
+            template = get(
+                db, ActionTemplate, get(db, ActionItem, link.template_item_id).template_version_id
+            )
+            if not applicable(template, item, project):
+                old = record(link)
+                link.status = "superseded"
+                audit(db, link, "action_scope_changed", request_id, old)
     node.row_version += 1
     audit(db, item, "edit_draft", request_id, before)
     return node

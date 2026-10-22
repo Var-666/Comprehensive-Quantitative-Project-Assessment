@@ -6,23 +6,129 @@ import { ElInput } from "element-plus/es/components/input/index";
 import FormSelect from "./FormSelect.vue";
 import { ElOption } from "element-plus/es/components/select/index";
 import FormDate from "./FormDate.vue";
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import type { Milestone } from "../types";
+import { statuses } from "../types";
+import { displayTime } from "../llmTypes";
 import Modal from "./Modal.vue";
 import StatusBadge from "./StatusBadge.vue";
-import { useAuth } from "../store";
+import { useAuth, useCatalog } from "../store";
 import NodeActions from "./NodeActions.vue";
+import NodeConfiguration from "./NodeConfiguration.vue";
 const auth = useAuth();
-const props = defineProps<{ node: Milestone; planId: string }>();
-const emit = defineEmits<{ close: []; changed: [] }>();
+const catalog = useCatalog();
+const props = defineProps<{
+  node: Milestone;
+  planId: string;
+  justCreated?: boolean;
+}>();
+const emit = defineEmits<{
+  close: [];
+  changed: [];
+  continue: [];
+  approve: [];
+}>();
+const nodeActions = ref<InstanceType<typeof NodeActions>>();
 const detail = ref<Milestone>(props.node),
   busy = ref(false),
   error = ref(""),
   success = ref(""),
   comment = ref("");
 const cancelReason = ref("");
-const section = ref("info");
+const section = ref(props.justCreated ? "configuration" : "info");
+const auditLabels: Record<string, string> = {
+  create: "新增节点",
+  edit_draft: "修改节点计划",
+  cancel_milestone: "取消节点",
+  submit_actual: "提交实际记录",
+  complete_milestone_from_tasks: "提交节点完成记录",
+  verify: "核实实际记录",
+  supersede_fact: "替换原核实记录",
+  sample_fact: "导入示例实际记录",
+};
+const historyFields: Record<string, string> = {
+  milestone_code: "节点编号",
+  milestone_name: "节点名称",
+  node_type_code: "节点类型",
+  planned_date: "计划日期",
+  date_kind: "日期性质",
+  department_id: "责任部门",
+  owner_id: "责任人",
+  source_ref: "日期依据",
+  change_reason: "变更原因",
+  is_included: "计划范围",
+  lifecycle_status: "节点状态",
+  completion_flag: "完成情况",
+  actual_date: "实际完成日期",
+  evidence_ref: "核实依据",
+  verification_status: "核实结果",
+  comment: "核实意见",
+  is_current: "当前核实事实",
+  tracking_only: "仅时间记录",
+};
+function historyValue(key: string, value: unknown): string {
+  if (key === "completion_flag")
+    return value === true ? "已完成" : value === false ? "尚未完成" : "待确认";
+  if (value === null || value === undefined || value === "") return "未填写";
+  if (key === "department_id")
+    return (
+      catalog.departments.find((d) => d.id === value)?.dept_name ||
+      "原部门已不可用"
+    );
+  if (key === "owner_id")
+    return (
+      catalog.users.find((u) => u.id === value)?.display_name ||
+      "原责任人已不可用"
+    );
+  if (key === "node_type_code")
+    return (
+      catalog.nodeTypes.find((t) => t.code === value)?.display_name ||
+      "原节点类型已不可用"
+    );
+  if (key === "date_kind")
+    return (
+      (
+        {
+          internal_plan: "内部计划",
+          contractual: "合同约定",
+          unconfirmed: "待确认",
+        } as Record<string, string>
+      )[String(value)] || "未记录"
+    );
+  if (key === "lifecycle_status")
+    return value === "cancelled" ? "已取消" : "正常";
+  if (key === "verification_status") return statuses[String(value)] || "未记录";
+  if (key === "is_included") return value ? "纳入计划" : "移出计划";
+  if (key === "is_current" || key === "tracking_only")
+    return value ? "是" : "否";
+  return String(value);
+}
+const auditEntries = computed(() =>
+  (detail.value.audit_events || []).map((event) => ({
+    ...event,
+    title: auditLabels[event.action] || "更新节点记录",
+    changes: Object.entries(historyFields)
+      .filter(
+        ([key]) =>
+          (key in (event.after_json || {}) ||
+            key in (event.before_json || {})) &&
+          (event.before_json
+            ? event.before_json[key] !== event.after_json?.[key]
+            : key !== "is_current" &&
+              event.after_json?.[key] !== null &&
+              event.after_json?.[key] !== ""),
+      )
+      .map(([key, label]) => ({
+        label,
+        before:
+          event.before_json && key !== "change_reason"
+            ? historyValue(key, event.before_json[key])
+            : null,
+        after: historyValue(key, event.after_json?.[key]),
+      })),
+  })),
+);
 function jump(event: Event, value: string) {
   const dialog = (event.currentTarget as HTMLElement).closest(".modal");
   const body = dialog?.querySelector<HTMLElement>(".modal-body");
@@ -33,6 +139,23 @@ function jump(event: Event, value: string) {
   section.value = value;
   body.scrollTop +=
     target.getBoundingClientRect().top - body.getBoundingClientRect().top - 20;
+}
+async function confirmClose() {
+  return (
+    !nodeActions.value?.busy &&
+    (await guard.confirmDiscard()) &&
+    (await (nodeActions.value?.confirmDiscard() ?? true))
+  );
+}
+async function continueAdding() {
+  if (await confirmClose()) emit("continue");
+}
+async function approvePlan() {
+  if (await confirmClose()) emit("approve");
+}
+function openActions(event: Event, select: boolean) {
+  jump(event, "actions");
+  if (select) void nodeActions.value?.open();
 }
 async function cancelNode() {
   busy.value = true;
@@ -64,12 +187,20 @@ const guard = useUnsavedChanges(
   () => busy.value,
 );
 async function load() {
+  error.value = "";
   try {
     detail.value = await api<Milestone>(
       `/milestones/${props.node.id}?plan_version_id=${props.planId}`,
     );
   } catch (e) {
     error.value = errorMessage(e);
+  }
+}
+async function recheck() {
+  await load();
+  if (!error.value) {
+    await nodeActions.value?.refresh();
+    emit("changed");
   }
 }
 async function submit() {
@@ -127,7 +258,8 @@ onMounted(load);
 </script>
 <template>
   <Modal
-    :before-close="guard.confirmDiscard"
+    class="node-detail"
+    :before-close="confirmClose"
     :title="`${detail.milestone_code} · 节点详情`"
     :subtitle="detail.milestone_name"
     drawer
@@ -138,6 +270,7 @@ onMounted(load);
       ><nav class="drawer-tabs" aria-label="节点详情区段">
         <ElButton
           v-for="(title, key) in {
+            configuration: '配置检查',
             info: '节点信息',
             actions: '标准动作',
             records: '执行记录',
@@ -152,8 +285,21 @@ onMounted(load);
         </ElButton>
       </nav></template
     >
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p v-if="error" class="error" role="alert">
+      {{ error }} <ElButton @click="recheck">重试配置检查</ElButton>
+    </p>
     <OperationToast v-model="success" :busy="busy" />
+    <div data-node-section="configuration">
+      <NodeConfiguration
+        v-if="detail.configuration"
+        :configuration="detail.configuration"
+        :saved="justCreated"
+        @actions="openActions"
+        @approve="approvePlan"
+        @refresh="recheck"
+      />
+      <p v-else-if="!error" role="status">正在检查节点配置…</p>
+    </div>
     <section class="form-section" data-node-section="info">
       <h3>
         {{ detail.milestone_name }}
@@ -202,8 +348,10 @@ onMounted(load);
     </section>
     <div data-node-section="actions">
       <NodeActions
+        ref="nodeActions"
         :key="detail.plan_item.id"
         :node="detail"
+        :plan-id="planId"
         @changed="
           load();
           emit('changed');
@@ -310,7 +458,7 @@ onMounted(load);
           </thead>
           <tbody>
             <tr v-for="a in detail.actual_records" :key="a.id">
-              <td>{{ a.submitted_at }}</td>
+              <td>{{ displayTime(a.submitted_at) }}</td>
               <td>
                 {{
                   a.completion_flag === true
@@ -368,47 +516,161 @@ onMounted(load);
       <p v-if="!detail.actual_records.length" class="empty">尚无实际记录</p>
     </section>
     <section class="form-section" data-node-section="history">
-      <h3>计划历史快照</h3>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>快照</th>
-              <th>计划日期</th>
-              <th>节点名称</th>
-              <th>变更原因</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in detail.history" :key="p.id">
-              <td>{{ p.plan_version_id }}</td>
-              <td>{{ p.planned_date }}</td>
-              <td>{{ p.milestone_name }}</td>
-              <td>{{ p.change_reason }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <h3>计划版本记录</h3>
+      <ul class="node-version-list">
+        <li v-for="p in detail.history" :key="p.id">
+          <header>
+            <strong>{{ p.version_label }}</strong
+            ><StatusBadge :value="p.version_status" />
+          </header>
+          <dl class="node-history-facts">
+            <div>
+              <dt>节点名称</dt>
+              <dd>{{ p.milestone_name }}</dd>
+            </div>
+            <div>
+              <dt>计划日期</dt>
+              <dd>{{ p.planned_date }}</dd>
+            </div>
+          </dl>
+          <p class="muted">{{ p.change_reason || "未填写变更原因" }}</p>
+        </li>
+      </ul>
+      <p v-if="!detail.history?.length" class="muted">暂无计划版本记录</p>
     </section>
     <section class="form-section">
-      <h3>变更留痕</h3>
-      <details v-for="e in detail.audit_events" :key="e.id">
-        <summary>
-          {{ e.occurred_at }} · {{ e.action }} · {{ e.actor_id }}
-        </summary>
-        <pre>{{
-          JSON.stringify(
-            { before: e.before_json, after: e.after_json },
-            null,
-            2,
-          )
-        }}</pre>
-      </details>
+      <h3>操作记录</h3>
+      <ol class="node-audit-list">
+        <li v-for="e in auditEntries" :key="e.id">
+          <strong>{{ e.title }}</strong>
+          <p class="muted">
+            {{ e.actor_name || "历史操作人未记录" }} ·
+            <time :datetime="e.occurred_at">{{
+              displayTime(e.occurred_at)
+            }}</time>
+          </p>
+          <dl class="node-audit-changes">
+            <div v-for="change in e.changes" :key="change.label">
+              <dt>{{ change.label }}</dt>
+              <dd>
+                <template v-if="change.before !== null"
+                  ><span class="muted">{{ change.before }}</span> → </template
+                >{{ change.after }}
+              </dd>
+            </div>
+          </dl>
+        </li>
+      </ol>
+      <p v-if="!auditEntries.length" class="muted">暂无操作记录</p>
     </section>
     <template #footer="{ close }"
-      ><ElButton :disabled="busy" @click="close" native-type="submit"
-        >关闭</ElButton
-      ></template
-    >
+      ><ElButton :disabled="busy" @click="close" native-type="submit">{{
+        justCreated ? "返回节点列表" : "关闭"
+      }}</ElButton>
+      <ElButton
+        v-if="justCreated"
+        :disabled="busy"
+        type="primary"
+        @click="continueAdding"
+        >继续添加节点</ElButton
+      >
+    </template>
   </Modal>
 </template>
+
+<style>
+.node-detail .modal-body,
+.node-detail .modal-body > div[data-node-section] {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+.node-detail .modal-body > *,
+.node-detail [data-node-section] > .form-section {
+  min-width: 0;
+  margin-block: 0;
+}
+.node-detail .form-section > h3 {
+  margin: 0 0 16px;
+}
+.node-detail .form-section > :last-child {
+  margin-bottom: 0;
+}
+</style>
+<style scoped>
+.node-version-list,
+.node-audit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.node-version-list li {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.node-version-list li + li {
+  margin-top: 12px;
+}
+.node-version-list header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.node-history-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  margin: 12px 0;
+}
+.node-history-facts dt,
+.node-audit-changes dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.node-history-facts dd,
+.node-audit-changes dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.node-version-list p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.node-audit-list li {
+  position: relative;
+  border-left: 2px solid var(--line);
+  padding: 0 0 22px 18px;
+  margin-left: 5px;
+}
+.node-audit-list li:last-child {
+  padding-bottom: 0;
+}
+.node-audit-list li::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+.node-audit-list p {
+  margin: 6px 0 10px;
+  font-size: 12px;
+}
+.node-audit-changes {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.node-audit-changes > div {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 8px;
+}
+.node-audit-changes dd {
+  margin: 0;
+}
+</style>

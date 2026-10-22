@@ -45,12 +45,18 @@ class MilestoneInput(Input):
     owner_id: str | None = None
     source_ref: str | None = Field(default=None, max_length=500)
     change_reason: str = Field(min_length=1, max_length=2000)
+    tracking_only: bool = False
 
     @model_validator(mode="after")
     def source(self):
         if self.date_kind == "contractual" and not self.source_ref:
             raise ValueError("合同日期必须保留来源说明；说明不等同于正式附件")
         return self
+
+
+class MilestoneCreate(MilestoneInput):
+    milestone_code: str | None = Field(default=None, min_length=1, max_length=64)
+    change_reason: str = Field(default="新增节点", min_length=1, max_length=2000)
 
 
 class ActualInput(Input):

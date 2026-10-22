@@ -429,8 +429,8 @@ onMounted(async () => {
     <section v-else class="card table-card">
       <div class="section-title">
         <h3>节点评价与异常追溯</h3>
-        <label
-          >评价分类<FormSelect
+        <label class="metric-category-filter"
+          ><span>评价分类</span><FormSelect
             v-model="category"
             @change="page = 1"
             :aria-label="'评价分类'"
@@ -539,3 +539,16 @@ onMounted(async () => {
     @close="evidence = undefined"
   />
 </template>
+<style scoped>
+.metric-category-filter {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.metric-category-filter :deep(.ui-select-field) {
+  flex: 0 0 180px;
+  width: 180px;
+}
+</style>

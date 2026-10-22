@@ -45,9 +45,8 @@ test('project and node edits persist; plan revision preserves the original sched
     await page.screenshot({path:path.resolve(`../docs/figma-ui/after/node-form-${width}.png`)});
   }
   await page.setViewportSize({width:1440,height:1000});
-  await dialog.getByLabel('节点编号 *', { exact: true }).fill('E2E-N001');
+  await dialog.getByLabel('节点编号', { exact: true }).fill('E2E-N001');
   await dialog.getByLabel('节点名称 *', { exact: true }).fill('浏览器测试节点');
-  await dialog.getByLabel('录入 / 变更原因 *').fill('验证计划持久化');
   let nodeWrites=0;page.on('request',r=>{if(r.method()==='POST'&&/\/projects\/[^/]+\/milestones$/.test(new URL(r.url()).pathname))nodeWrites++;});
   await dialog.getByRole('button',{name:'保存节点',exact:true}).click();
   expect(nodeWrites).toBe(0);
@@ -56,6 +55,8 @@ test('project and node edits persist; plan revision preserves the original sched
   await dialog.getByLabel('计划完成日期 *').fill('2026-11-01');
   await dialog.getByLabel('计划完成日期 *').press('Tab');
   await dialog.getByRole('button', { name: '保存节点' }).click();
+  await expect(page.getByRole('heading', { name: '节点配置结果', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '返回节点列表', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('main .table-wrap tbody')).toContainText('E2E-N001');
   await expect(page.getByRole('button', { name: '批准生效' })).toBeDisabled();
@@ -75,7 +76,7 @@ test('project and node edits persist; plan revision preserves the original sched
   await page.locator('main .table-wrap tbody').getByRole('button', { name: '编辑', exact: true }).click();
   dialog = page.getByRole('dialog');
   await dialog.getByLabel('计划完成日期 *').fill('2026-11-04');
-  await dialog.getByLabel('录入 / 变更原因 *').fill('调整三天并保留旧版');
+  await dialog.getByLabel('变更原因 *').fill('调整三天并保留旧版');
   await dialog.getByRole('button', { name: '保存节点' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('main .table-wrap tbody')).toContainText('2026-11-04');
@@ -93,7 +94,7 @@ test('project and node edits persist; plan revision preserves the original sched
   await dialog.getByLabel('实际完成日期', { exact: true }).fill('2026-11-02');
   await dialog.getByLabel('来源 / 证据说明 *').fill('虚构完成记录，用于验证');
   await dialog.getByRole('button', { name: '提交实际记录', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('仍需独立核实');
+  await expect(page.getByRole('status').filter({hasText:'仍需独立核实'})).toBeVisible();
   await expect(dialog.getByText('未知 / 尚未确认完成', { exact: true })).toBeVisible();
   await expect(dialog.getByRole('button',{name:'确认核实',exact:true})).toHaveCount(0);
   await dialog.getByRole('button',{name:'关闭',exact:true}).last().click();

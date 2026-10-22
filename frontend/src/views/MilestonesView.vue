@@ -28,6 +28,7 @@ import Modal from "../components/Modal.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import TimelineDot from "../components/TimelineDot.vue";
 import { businessToday, categoryLabels, type Metric } from "../evaluationTypes";
+import { matchingLabels, configurationLabels } from "../workflowTypes";
 const route = useRoute(),
   router = useRouter(),
   catalog = useCatalog();
@@ -50,6 +51,7 @@ const nodes = ref<Page<Milestone>>({
   busy = ref(false),
   success = ref("");
 const type = ref(""),
+  configurationStatus = ref(""),
   department = ref(""),
   showForm = ref(false),
   editing = ref<Milestone>(),
@@ -61,6 +63,15 @@ const type = ref(""),
 const changesOnly = ref(false),
   changeTotal = ref(0),
   planTotal = ref(0);
+const lastSaved = ref<Milestone>();
+async function saved(node: Milestone) {
+  const created = !editing.value;
+  showForm.value = false;
+  lastSaved.value = created ? node : undefined;
+  if (created) showing.value = node;
+  else success.value = "节点计划已保存";
+  await loadProject(true);
+}
 const changeKinds = { added: "新增", changed: "已变更", removed: "移出计划" };
 const canEdit = computed(
   () =>
@@ -143,6 +154,7 @@ async function loadNodes(page = 1) {
       page: String(page),
       page_size: String(nodePageSize),
       changes_only: String(changesOnly.value),
+      configuration_status: configurationStatus.value,
     });
     const result = await api<
       Page<Milestone> & { change_total: number; plan_total: number }
@@ -170,6 +182,17 @@ async function loadNodes(page = 1) {
 function edit(node?: Milestone) {
   editing.value = node;
   showForm.value = true;
+}
+function continueAdding() {
+  showing.value = undefined;
+  lastSaved.value = undefined;
+  edit();
+}
+function approveFromDetail() {
+  showing.value = undefined;
+  reason.value = "";
+  planError.value = "";
+  planDialog.value = "activate";
 }
 const planGuard = useUnsavedChanges(
   () => ({ reason: reason.value }),
@@ -207,11 +230,17 @@ async function savePlan() {
   }
 }
 onMounted(async () => {
+  const requestedNode = route.query.node;
   busy.value = true;
   try {
     await Promise.all([loadOptions(), catalog.load()]);
     if (!projectId.value) projectId.value = projectOptions.value[0]?.id || "";
     await loadProject();
+    if (requestedNode && planId.value) {
+      showing.value = await api<Milestone>(
+        `/milestones/${encodeURIComponent(String(requestedNode))}?plan_version_id=${encodeURIComponent(planId.value)}`,
+      );
+    }
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -243,6 +272,7 @@ onMounted(async () => {
         @change="
           type = '';
           department = '';
+          configurationStatus = '';
           loadProject();
         "
         :aria-label="'所属项目'"
@@ -470,6 +500,21 @@ onMounted(async () => {
             /> </FormSelect
         ></label>
       </div>
+      <label class="node-configuration-filter"
+        >配置状态<FormSelect
+          v-model="configurationStatus"
+          aria-label="配置状态"
+          @change="loadNodes()"
+        >
+          <ElOption value="" data-ui-value="" label="全部" />
+          <ElOption
+            v-for="(title, value) in configurationLabels"
+            :key="value"
+            :value="value"
+            :data-ui-value="value"
+            :label="title"
+          /> </FormSelect
+      ></label>
       <p v-if="busy" class="empty" role="status">正在加载节点…</p>
       <div v-else-if="nodes.items.length" class="table-wrap">
         <table class="milestone-list-table">
@@ -478,6 +523,8 @@ onMounted(async () => {
               <th>节点编号</th>
               <th>节点名称</th>
               <th>节点类型</th>
+              <th>标准动作</th>
+              <th>配置状态</th>
               <th>计划日期</th>
               <th v-if="selectedPlan.base_version_id">本版变更</th>
               <th>核实实际日期</th>
@@ -495,6 +542,24 @@ onMounted(async () => {
               <td>{{ n.milestone_code }}</td>
               <td>{{ n.milestone_name }}</td>
               <td>{{ n.node_type_code }}</td>
+              <td>
+                <span
+                  v-if="n.action_matching"
+                  class="badge"
+                  :title="n.action_matching.label"
+                  >{{ matchingLabels[n.action_matching.status] }} ·
+                  {{ n.action_matching.action_count }}项</span
+                ><span v-else class="muted">待检查</span>
+              </td>
+              <td>
+                <span
+                  v-if="n.configuration"
+                  class="badge"
+                  :class="n.configuration.ready ? 'verified' : 'draft'"
+                  :title="n.configuration.issues.join('；')"
+                  >{{ n.configuration.label }}</span
+                ><span v-else>待检查</span>
+              </td>
               <td>{{ n.plan_item.planned_date }}</td>
               <td v-if="selectedPlan.base_version_id">
                 <div v-if="n.plan_change" class="plan-change-summary">
@@ -556,18 +621,20 @@ onMounted(async () => {
       :plan="selectedPlan"
       :node="editing"
       @close="showForm = false"
-      @saved="
-        showForm = false;
-        success = '节点草稿已保存';
-        loadProject(true);
-      "
+      @saved="saved"
     />
     <NodeDetail
       v-if="showing"
       :node="showing"
       :plan-id="planId"
-      @close="showing = undefined"
+      :just-created="showing.id === lastSaved?.id"
+      @close="
+        showing = undefined;
+        lastSaved = undefined;
+      "
       @changed="loadProject(true)"
+      @continue="continueAdding"
+      @approve="approveFromDetail"
     />
     <Modal
       v-if="planDialog"
@@ -620,3 +687,10 @@ onMounted(async () => {
     >
   </template>
 </template>
+<style scoped>
+.node-configuration-filter {
+  display: block;
+  max-width: 220px;
+  margin-bottom: 14px;
+}
+</style>

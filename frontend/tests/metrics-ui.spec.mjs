@@ -53,6 +53,24 @@ test('metric tables keep single-line facts and header actions stay vertically ce
   for (const width of [1440, 1275, 1024]) {
     await page.setViewportSize({ width, height: 984 });
     await checkRows(9);
+    const filter = page.locator('.metric-category-filter');
+    const layout = await filter.evaluate(el => {
+      const label = el.querySelector('span').getBoundingClientRect();
+      const select = el.querySelector('.ui-select-field').getBoundingClientRect();
+      const heading = el.closest('.section-title').getBoundingClientRect();
+      return {
+        centerDelta: Math.abs((label.top + label.bottom - select.top - select.bottom) / 2),
+        readable: select.width >= 160,
+        contained: label.left >= heading.left && select.right <= heading.right,
+      };
+    });
+    expect(layout.centerDelta).toBeLessThanOrEqual(1);
+    expect(layout.readable && layout.contained).toBe(true);
+    await expect(filter).toContainText('全部节点');
+    if (width === 1275) {
+      await filter.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: 'test-results/metric-category-filter-1275.png', animations: 'disabled' });
+    }
   }
   const first = project.evidence[0];
   expect(await table.locator('tbody tr').first().locator('td').allTextContents()).toEqual([

@@ -8,24 +8,19 @@ import {
   Warning,
 } from "@element-plus/icons-vue";
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
 import { api, errorMessage } from "../api";
 import { useAuth } from "../store";
 import { businessToday, type Dashboard } from "../evaluationTypes";
-import type { Project } from "../types";
 import { label } from "../workflowTypes";
 import StatusBadge from "../components/StatusBadge.vue";
-import ProjectForm from "../components/ProjectForm.vue";
 import Modal from "../components/Modal.vue";
-import Icon from "../components/Icon.vue";
+import WorkbenchGuide from "../components/WorkbenchGuide.vue";
 
-const auth = useAuth(),
-  router = useRouter();
+const auth = useAuth();
 const summary = ref<{ total: number; active: number; milestones: number }>();
 const dashboard = ref<Dashboard>();
 const error = ref(""),
   busy = ref(true),
-  showForm = ref(false),
   showBasis = ref(false);
 const chartMax = computed(() =>
   Math.max(
@@ -55,10 +50,6 @@ async function load() {
     busy.value = false;
   }
 }
-function saved(project: Project) {
-  showForm.value = false;
-  void router.push(`/projects/${project.id}`);
-}
 onMounted(load);
 </script>
 <template>
@@ -71,16 +62,8 @@ onMounted(load);
           {{ auth.user?.demo_mode ? "模拟测试数据" : "业务数据" }}
         </p>
       </div>
-      <ElButton
-        class="primary"
-        :disabled="!auth.user?.is_system_admin"
-        @click="showForm = true"
-        native-type="submit"
-        type="primary"
-      >
-        <Icon name="imgVectorPlus" />新建项目
-      </ElButton>
     </div>
+    <WorkbenchGuide />
     <p v-if="error" class="error" role="alert">
       {{ error }}
       <ElButton :disabled="busy" @click="load" native-type="submit"
@@ -247,7 +230,6 @@ onMounted(load);
         </p>
       </section>
     </template>
-    <ProjectForm v-if="showForm" @close="showForm = false" @saved="saved" />
     <Modal
       v-if="showBasis && dashboard"
       title="总览统计依据"
