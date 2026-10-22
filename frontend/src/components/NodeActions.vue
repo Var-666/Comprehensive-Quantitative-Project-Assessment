@@ -14,6 +14,7 @@ import type { ActionLink, ActionTemplate } from "../workflowTypes";
 import { label } from "../workflowTypes";
 import Modal from "./Modal.vue";
 const props = defineProps<{ node: Milestone }>();
+const emit = defineEmits<{ changed: [] }>();
 const auth = useAuth(),
   links = ref<ActionLink[]>([]),
   templates = ref<ActionTemplate[]>([]),
@@ -59,16 +60,20 @@ async function save() {
   busy.value = true;
   error.value = "";
   try {
-    await api(`/milestones/${props.node.id}/action-links`, {
-      method: "POST",
-      body: json({
-        plan_item_id: props.node.plan_item.id,
-        template_item_ids: selected.value,
-      }),
-    });
+    links.value = await api<ActionLink[]>(
+      `/milestones/${props.node.id}/action-links`,
+      {
+        method: "POST",
+        body: json({
+          plan_item_id: props.node.plan_item.id,
+          plan_version_id: props.node.plan_item.plan_version_id,
+          template_item_ids: selected.value,
+        }),
+      },
+    );
     show.value = false;
     success.value = "动作配置已保存；模板版本及内容已留快照";
-    await load();
+    emit("changed");
   } catch (e) {
     error.value = errorMessage(e);
   } finally {

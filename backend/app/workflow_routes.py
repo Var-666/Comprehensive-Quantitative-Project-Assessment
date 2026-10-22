@@ -7,7 +7,7 @@ from . import auth
 from . import services as svc
 from . import workflow as wf
 from .config import settings
-from .models import AuditEvent, Milestone, NodeType, PlanItem, Project, now
+from .models import ActualRecord, AuditEvent, Milestone, NodeType, PlanItem, Project, now
 from .workflow_models import (
     ActionLink,
     ActionTemplate,
@@ -29,6 +29,7 @@ from .workflow_schemas import (
     DispatchInput,
     FeedbackInput,
     LinkInput,
+    MilestoneCompletionInput,
     NotificationDecision,
     NotificationEdit,
     ReviewInput,
@@ -568,7 +569,71 @@ def register(app, Db, ok):
 
     @app.get("/api/v1/tasks/{task_id}")
     def task(request: Request, task_id: str, db: Db):
-        return ok(request, wf.task_detail(db, scoped(db, request.state.principal, Task, task_id)))
+        obj = scoped(db, request.state.principal, Task, task_id)
+        return ok(
+            request,
+            {
+                **wf.task_detail(db, obj),
+                "milestone_completion": wf.milestone_completion(db, obj),
+            },
+        )
+
+    @app.post("/api/v1/tasks/{task_id}/complete-milestone")
+    def complete_milestone(
+        request: Request,
+        task_id: str,
+        data: MilestoneCompletionInput,
+        db: Db,
+        if_match: str = Header(),
+    ):
+        obj = scoped(db, request.state.principal, Task, task_id, "review", True)
+        state = wf.milestone_completion(db, obj)
+        node = svc.get(db, Milestone, state["milestone_id"], True)
+        if state["actual_date"]:
+            if state["actual_date"] != data.actual_date.isoformat():
+                svc.fail(409, "ALREADY_COMPLETED", "节点已核销，不能在此修改实际日期")
+            return ok(request, wf.task_detail(db, obj))
+        svc.match(node, if_match)
+        if not state["ready"]:
+            svc.fail(409, "MILESTONE_NOT_READY", state["reason"])
+        if not state["can_confirm"]:
+            svc.fail(403, "SELF_VERIFICATION_FORBIDDEN", "任务反馈提交人不能核销自己的节点完成事实")
+        wf.live_task(db, obj)
+        feedback = list(db.scalars(select(Feedback).where(Feedback.id.in_(state["feedback_ids"]))))
+        for old in db.scalars(
+            select(ActualRecord).where(
+                ActualRecord.milestone_id == node.id, ActualRecord.is_current.is_(True)
+            )
+        ):
+            before = svc.record(old)
+            old.is_current = False
+            svc.audit(db, old, "supersede_fact", request.state.request_id, before)
+        db.flush()
+        actual = ActualRecord(
+            milestone_id=node.id,
+            actual_date=data.actual_date,
+            completion_flag=True,
+            verification_status="verified",
+            is_current=True,
+            submitted_by="task-workflow",
+            verified_by=request.state.principal.user_id,
+            verified_at=now(),
+            evidence_ref=f"沿用已核实的{len(feedback)}项标准任务凭证；详见任务反馈及核销记录",
+            comment="审核人已明确确认节点实际完成。沿用任务反馈：\n"
+            + "\n".join(f"{f.id}：{f.evidence_ref}" for f in feedback),
+        )
+        db.add(actual)
+        node.row_version += 1
+        svc.audit(db, actual, "complete_milestone_from_tasks", request.state.request_id)
+        item_ids = select(PlanItem.id).where(PlanItem.milestone_id == node.id)
+        wf.invalidate(
+            db,
+            select(Reminder).where(Reminder.milestone_plan_item_id.in_(item_ids)),
+            "节点已核实完成",
+            request.state.request_id,
+        )
+        db.commit()
+        return ok(request, wf.task_detail(db, obj))
 
     @app.patch("/api/v1/tasks/{task_id}")
     def update_task(

@@ -7,7 +7,7 @@ from .workflow_models import DeliveryAttempt, InboxMessage
 
 def deliver(db, notice, channel, request_id):
     if channel != "in_app":
-        fail(409, "CHANNEL_DISABLED", "外部通知渠道尚未授权，仅允许显式站内发布")
+        fail(409, "CHANNEL_DISABLED", "外部通知渠道尚未授权，仅允许站内投递")
     before = record(notice)
     message = InboxMessage(
         notification_id=notice.id,

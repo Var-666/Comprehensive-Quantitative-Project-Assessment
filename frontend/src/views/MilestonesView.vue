@@ -58,6 +58,10 @@ const type = ref(""),
   reason = ref(""),
   planBusy = ref(false),
   planError = ref("");
+const changesOnly = ref(false),
+  changeTotal = ref(0),
+  planTotal = ref(0);
+const changeKinds = { added: "新增", changed: "已变更", removed: "移出计划" };
 const canEdit = computed(
   () =>
     selectedPlan.value?.status === "draft" &&
@@ -89,6 +93,9 @@ async function loadProject(preserve = false) {
   busy.value = true;
   error.value = "";
   if (!preserve) {
+    changesOnly.value = false;
+    changeTotal.value = 0;
+    planTotal.value = 0;
     project.value = undefined;
     plans.value = [];
     planId.value = "";
@@ -135,12 +142,15 @@ async function loadNodes(page = 1) {
       department: department.value,
       page: String(page),
       page_size: String(nodePageSize),
+      changes_only: String(changesOnly.value),
     });
-    const result = await api<Page<Milestone>>(
-      `/projects/${id}/milestones?${q}`,
-    );
+    const result = await api<
+      Page<Milestone> & { change_total: number; plan_total: number }
+    >(`/projects/${id}/milestones?${q}`);
     if (request !== nodeRequest) return;
     nodes.value = result;
+    changeTotal.value = result.change_total;
+    planTotal.value = result.plan_total;
     if (effective) {
       try {
         const result = await api<Metric>(
@@ -250,7 +260,10 @@ onMounted(async () => {
         v-model="planId"
         aria-label="计划版本"
         :disabled="busy"
-        @change="loadNodes()"
+        @change="
+          changesOnly = false;
+          loadNodes();
+        "
       >
         <ElOption
           :data-ui-value="p.id"
@@ -309,7 +322,7 @@ onMounted(async () => {
       <StatCard
         class="node-stat"
         label="全部计划节点"
-        :value="metric ? metric.evidence.length : nodes.total"
+        :value="metric ? metric.evidence.length : planTotal"
         :icon="List"
         compact
       />
@@ -352,20 +365,19 @@ onMounted(async () => {
       >
     </p>
     <p v-if="selectedPlan.status === 'draft'" class="muted">
-      草稿尚未批准，不计算正式节点评价；批准后显示统计。
+      草稿尚未批准，不计算正式节点评价；未改动节点继承基准版本，仅保存本版变更。
+    </p>
+    <p v-if="selectedPlan.base_version_id" class="muted">
+      相较
+      {{
+        plans.find((p) => p.id === selectedPlan?.base_version_id)?.version_label
+      }}
+      基准版本，本版共 {{ changeTotal }} 项变更；未改动节点沿用基准。
     </p>
 
     <section class="card timeline-card">
       <div class="section-title">
-        <div class="timeline-heading">
-          <h3>关键里程碑时间轴</h3>
-          <p class="muted">
-            按计划日期排序 · 当前页前 8 条 · {{ selectedPlan.version_label }}
-          </p>
-        </div>
-        <small class="muted">{{
-          metric ? `统计截止 ${metric.as_of_date}` : "草稿未评价"
-        }}</small>
+        <h3>关键里程碑时间轴</h3>
       </div>
       <div v-if="nodes.items.length" class="timeline-scroll">
         <div class="timeline milestone-timeline">
@@ -424,6 +436,10 @@ onMounted(async () => {
         </div>
       </div>
       <div class="filters compact">
+        <label v-if="selectedPlan.base_version_id" class="checkbox-line">
+          <input v-model="changesOnly" type="checkbox" @change="loadNodes()" />
+          仅看本版变更（{{ changeTotal }}项）
+        </label>
         <label
           >节点类型<FormSelect
             v-model="type"
@@ -463,6 +479,7 @@ onMounted(async () => {
               <th>节点名称</th>
               <th>节点类型</th>
               <th>计划日期</th>
+              <th v-if="selectedPlan.base_version_id">本版变更</th>
               <th>核实实际日期</th>
               <th>责任部门</th>
               <th>核实状态</th>
@@ -470,11 +487,33 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="n in nodes.items" :key="n.id">
+            <tr
+              v-for="n in nodes.items"
+              :key="n.id"
+              :class="{ 'plan-changed': !!n.plan_change }"
+            >
               <td>{{ n.milestone_code }}</td>
               <td>{{ n.milestone_name }}</td>
               <td>{{ n.node_type_code }}</td>
               <td>{{ n.plan_item.planned_date }}</td>
+              <td v-if="selectedPlan.base_version_id">
+                <div v-if="n.plan_change" class="plan-change-summary">
+                  <span class="badge">{{
+                    changeKinds[n.plan_change.kind]
+                  }}</span>
+                  <small v-if="n.plan_change.old_date"
+                    >{{ n.plan_change.old_date }} → {{ n.plan_change.new_date
+                    }}<template v-if="n.plan_change.delta_days">
+                      · {{ n.plan_change.delta_days > 0 ? "后延" : "提前"
+                      }}{{ Math.abs(n.plan_change.delta_days) }}天</template
+                    ></small
+                  >
+                  <small :title="n.plan_change.reason">{{
+                    n.plan_change.reason
+                  }}</small>
+                </div>
+                <span v-else class="muted">沿用基准</span>
+              </td>
               <td>{{ n.current_actual?.actual_date || "待确认" }}</td>
               <td>{{ n.department_name || "未指定" }}</td>
               <td><StatusBadge :value="n.verification_status" /></td>
@@ -541,7 +580,7 @@ onMounted(async () => {
         <p class="notice">
           {{
             planDialog === "create"
-              ? "从当前生效版本复制全部节点快照，原版本保持只读。"
+              ? "继承当前生效版本，仅保存变动节点及原因；原版本保持只读。"
               : "仅本项目审核人员可批准。参与编制此版本的人员不能批准自己的计划。"
           }}
         </p>

@@ -13,7 +13,7 @@ import pytest
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import func, select
 from test_evaluation import ADMIN, grant, sample
-from test_workflow import data, first_notice, scan, setup_workflow, submit_notice
+from test_workflow import data, first_notice, scan, scan_legacy, setup_workflow, submit_notice
 
 from app import ai_service
 from app.config import settings
@@ -216,7 +216,7 @@ def test_complete_simulated_business_chain(client, factory, model_acceptance):
     p, node, *_ = setup_workflow(client)
     pid = p["id"]
     evidence["completed_steps"].append("sample_excel_and_project_plan_action_rule_approval")
-    assert data(scan(client, p))["generated"] == 1
+    assert data(scan_legacy(client, p))["generated"] == 1
     assert data(scan(client, p))["generated"] == 0
     notice = first_notice(client)
     notice_path = f"/api/v1/notifications/{notice['id']}"

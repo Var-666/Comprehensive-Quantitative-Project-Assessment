@@ -180,8 +180,35 @@ onMounted(load);
         </div>
       </dl>
     </section>
+    <section v-if="detail.plan_change" class="notice">
+      <strong
+        >本版{{
+          detail.plan_change.kind === "added"
+            ? "新增节点"
+            : detail.plan_change.kind === "removed"
+              ? "移出计划"
+              : "节点变更"
+        }}</strong
+      >
+      <p v-if="detail.plan_change.old_date">
+        计划日期：{{ detail.plan_change.old_date }} →
+        {{ detail.plan_change.new_date
+        }}<template v-if="detail.plan_change.delta_days">
+          · {{ detail.plan_change.delta_days > 0 ? "后延" : "提前"
+          }}{{ Math.abs(detail.plan_change.delta_days) }}天</template
+        >
+      </p>
+      <p>变更原因：{{ detail.plan_change.reason }}</p>
+    </section>
     <div data-node-section="actions">
-      <NodeActions :key="detail.plan_item.id" :node="detail" />
+      <NodeActions
+        :key="detail.plan_item.id"
+        :node="detail"
+        @changed="
+          load();
+          emit('changed');
+        "
+      />
     </div>
     <section v-if="auth.can(detail.project_id)" class="form-section">
       <details v-if="detail.lifecycle_status === 'active'">

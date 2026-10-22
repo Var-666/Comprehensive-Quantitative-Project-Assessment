@@ -368,6 +368,7 @@ def milestones(
     page_size: int = Query(100, ge=1, le=100),
     type: str | None = None,
     department: str | None = None,
+    changes_only: bool = False,
 ):
     project = svc.get(db, Project, project_id)
     if not plan_version_id:
@@ -379,15 +380,19 @@ def milestones(
     plan = svc.get(db, PlanVersion, plan_version_id)
     if plan.project_id != project_id:
         svc.fail(422, "PLAN_PROJECT_MISMATCH", "版本不属于该项目")
+    changes = svc.plan_changes(db, plan)
     query = (
         select(Milestone)
         .join(PlanItem, Milestone.id == PlanItem.milestone_id)
         .where(
             Milestone.project_id == project_id,
-            PlanItem.plan_version_id == plan_version_id,
-            PlanItem.is_included.is_(True),
+            PlanItem.id.in_(svc.plan_item_ids(plan_version_id)),
         )
     )
+    if changes_only:
+        query = query.where(PlanItem.milestone_id.in_(changes))
+    else:
+        query = query.where(PlanItem.is_included.is_(True))
     if type:
         query = query.where(PlanItem.node_type_code == type)
     if department:
@@ -404,7 +409,13 @@ def milestones(
             "total": total,
             "page": page,
             "page_size": page_size,
-            "items": [svc.milestone_detail(db, n, plan_version_id) for n in nodes],
+            "items": [svc.milestone_detail(db, n, plan_version_id, changes) for n in nodes],
+            "change_total": len(changes),
+            "plan_total": db.scalar(
+                select(func.count())
+                .select_from(PlanItem)
+                .where(PlanItem.id.in_(svc.plan_item_ids(plan.id)), PlanItem.is_included.is_(True))
+            ),
         },
     )
 

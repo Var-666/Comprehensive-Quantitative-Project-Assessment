@@ -222,9 +222,6 @@ onMounted(load);
             >查看全部节点 ›</RouterLink
           >
         </div>
-        <p class="muted">
-          生效计划按日期排序 · 当前展示前 5 项；不代表加权项目完成率
-        </p>
         <div v-if="metric?.evidence.length" class="timeline detail-timeline">
           <RouterLink
             v-for="node in metric.evidence
@@ -253,7 +250,6 @@ onMounted(load);
           <h3>项目重点待办事项</h3>
           <span class="badge todo">待处理 {{ tasks.total }}</span>
         </div>
-        <p class="muted">展示待处理状态任务；其他状态见提醒与待办。</p>
         <RouterLink
           v-for="task in tasks.items"
           :key="task.id"
@@ -306,7 +302,7 @@ onMounted(load);
       </div>
       <p v-if="metric" class="muted">
         {{ metric.formula.score }}
-        任务反馈、通知审核通过均不替代节点实际完成核实。
+        标准动作全部核实后，可在任务详情确认节点实际完成并一键核销，沿用已有凭证；通知送达不代表节点完成。
       </p>
     </section>
     <section id="project-audit-history" class="card table-card">

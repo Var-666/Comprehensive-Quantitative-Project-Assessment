@@ -46,6 +46,7 @@ class ReviewInput(Input):
 
 class LinkInput(Input):
     plan_item_id: str
+    plan_version_id: str | None = None
     template_item_ids: list[str] = Field(min_length=1, max_length=100)
 
 
@@ -141,6 +142,11 @@ class FeedbackInput(Input):
 class VerificationInput(Input):
     decision: Literal["accepted", "returned", "disputed"]
     comment: Text
+
+
+class MilestoneCompletionInput(Input):
+    actual_date: date
+    confirmed: Literal[True]
 
 
 class CancelInput(Input):

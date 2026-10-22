@@ -117,7 +117,6 @@ onMounted(() => load());
           <h3>标准动作模板</h3>
           <span class="badge">{{ data.total }} 个版本</span>
         </div>
-        <p class="template-library-caption">按节点类型筛选并选择模板</p>
         <form
           class="filters compact template-filters"
           @submit.prevent="load(1)"

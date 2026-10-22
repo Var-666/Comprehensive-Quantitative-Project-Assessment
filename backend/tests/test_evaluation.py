@@ -463,11 +463,11 @@ def test_real_adapter_contract_rejects_invented_facts_without_fallback(monkeypat
     assert len(calls) == 1, "重试由确定性代码处理；不得让模型决定重试或静默降级"
 
 
-def test_ai_notice_keeps_sources_and_requires_human_review(client):
-    from test_workflow import first_notice, scan, setup_workflow, submit_notice
+def test_legacy_ai_notice_keeps_sources_and_requires_human_review(client):
+    from test_workflow import first_notice, scan_legacy, setup_workflow, submit_notice
 
     p, *_ = setup_workflow(client)
-    assert scan(client, p).status_code == 200
+    assert scan_legacy(client, p).status_code == 200
     notice = first_notice(client)
     path = f"/api/v1/notifications/{notice['id']}/ai-draft"
     r = client.post(path, headers={"If-Match": str(notice["row_version"])}, json={})

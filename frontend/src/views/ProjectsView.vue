@@ -184,7 +184,6 @@ onMounted(() => load());
   <section class="card table-card" :aria-busy="busy">
     <div class="section-title">
       <h3>试点项目台账</h3>
-      <span class="muted">数据来自本地数据库 · 共 {{ data.total }} 个项目</span>
     </div>
     <p v-if="busy" class="empty" role="status">正在加载项目…</p>
     <div v-else-if="data.items.length" class="table-wrap">

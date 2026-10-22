@@ -1,0 +1,57 @@
+import { test, expect } from '@playwright/test';
+import { choose } from './ui-controls.mjs';
+
+test('plan delta highlights the changed date and reason while inherited nodes remain visible', async ({ page }) => {
+  await page.goto('/milestones');
+  await page.getByLabel('账号', { exact: true }).fill('accept-editor');
+  await page.getByLabel('密码', { exact: true }).fill(process.env.ACCEPTANCE_PASSWORD);
+  await page.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '项目节点管理', exact: true })).toBeVisible();
+  const projects = (await (await page.request.get('/api/v1/projects')).json()).data.items;
+  const project = projects.find(p => p.project_code === 'P-H014');
+  await page.goto(`/milestones?project=${project.id}`);
+  const original = (await (await page.request.get(`/api/v1/projects/${project.id}/milestones?plan_version_id=${project.current_plan_version_id}`)).json()).data;
+  const target = original.items[0];
+  const shifted = new Date(`${target.plan_item.planned_date}T00:00:00Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + 2);
+  const newDate = shifted.toISOString().slice(0, 10);
+  await page.getByRole('button', { name: '新建变更草稿', exact: true }).click();
+  const create = page.getByRole('dialog', { name: '新建计划变更草稿', exact: true });
+  await create.getByLabel('变更原因 *', { exact: true }).fill('雨天调整一个节点，其余继承');
+  await create.getByRole('button', { name: '创建变更草稿', exact: true }).click();
+  await expect(create).toHaveCount(0);
+  const onlyChanges = page.getByRole('checkbox', { name: /仅看本版变更/ });
+  await expect(onlyChanges).toBeVisible();
+  await expect(page.locator('.node-stat').first()).toContainText(String(original.total));
+  const table = page.locator('.milestone-list-table');
+  await expect(table.locator('tbody tr')).toHaveCount(10);
+  const row = table.getByRole('row').filter({ hasText: target.milestone_code });
+  await row.getByRole('button', { name: '编辑', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '编辑节点计划草稿', exact: true });
+  await editor.getByLabel('计划完成日期 *', { exact: true }).fill(newDate);
+  await editor.getByLabel('计划完成日期 *', { exact: true }).press('Tab');
+  await editor.getByLabel('录入 / 变更原因 *', { exact: true }).fill('连续降雨，后延两天');
+  await editor.getByRole('button', { name: '保存节点', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await onlyChanges.setChecked(true);
+  await expect(table.locator('tbody tr')).toHaveCount(1);
+  await expect(table.locator('tbody tr')).toHaveClass('plan-changed');
+  await expect(table).toContainText(`${target.plan_item.planned_date} → ${newDate}`);
+  await expect(table).toContainText('后延2天');
+  await expect(table).toContainText('连续降雨，后延两天');
+  await expect(page.locator('.node-stat').first()).toContainText(String(original.total));
+  for (const width of [1440, 1024]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await table.locator('.plan-change-summary small').first().evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await page.screenshot({ path: 'test-results/plan-diff-1024.png', fullPage: true });
+  await onlyChanges.setChecked(false);
+  await expect(table.locator('tbody tr')).toHaveCount(10);
+  const plans = (await (await page.request.get(`/api/v1/projects/${project.id}/plan-versions`)).json()).data;
+  const base = plans.find(p => p.id === project.current_plan_version_id);
+  await choose(page.getByRole('combobox', { name: '计划版本', exact: true }), base.id);
+  await expect(page.getByRole('checkbox', { name: /仅看本版变更/ })).toHaveCount(0);
+  await expect(table.getByRole('row').filter({ hasText: target.milestone_code })).toContainText(target.plan_item.planned_date);
+  await expect(table.locator('.plan-changed')).toHaveCount(0);
+});

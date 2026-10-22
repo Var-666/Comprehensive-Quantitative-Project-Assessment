@@ -3,6 +3,7 @@ import { useUnsavedChanges } from "../useUnsavedChanges";
 import OperationToast from "./OperationToast.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "./FormSelect.vue";
+import FormDate from "./FormDate.vue";
 import { ElOption } from "element-plus/es/components/select/index";
 import { ElInput } from "element-plus/es/components/input/index";
 import { ElCheckbox } from "element-plus/es/components/checkbox/index";
@@ -27,6 +28,14 @@ const auth = useAuth(),
   claimed = ref(false),
   review = ref(""),
   audit = ref<{ action: string; actor_id: string; occurred_at: string }[]>([]);
+const showCompletion = ref(false),
+  actualDate = ref(""),
+  nodeConfirmed = ref(false);
+const completionGuard = useUnsavedChanges(
+  () => ({ actualDate: actualDate.value, nodeConfirmed: nodeConfirmed.value }),
+  () => showCompletion.value,
+  () => busy.value,
+);
 const executor = computed(
   () => detail.value.assignee_id === auth.user?.user_id,
 );
@@ -108,9 +117,37 @@ async function verify(id: string, decision: string) {
         method: "POST",
         body: json({ decision, comment: review.value }),
       }),
-    "核实结果已留痕；不等同节点完成",
+    "核实结果已留痕",
   );
-  if (!error.value) guard.markSaved(["review"]);
+  if (!error.value) {
+    guard.markSaved(["review"]);
+    if (detail.value.milestone_completion?.can_confirm) openCompletion();
+  }
+}
+function openCompletion() {
+  actualDate.value = "";
+  nodeConfirmed.value = false;
+  showCompletion.value = true;
+}
+async function completeMilestone() {
+  const state = detail.value.milestone_completion;
+  if (!state?.can_confirm || !actualDate.value || !nodeConfirmed.value) return;
+  await perform(
+    () =>
+      api(`/tasks/${detail.value.id}/complete-milestone`, {
+        method: "POST",
+        headers: versionHeader(state.row_version),
+        body: json({
+          actual_date: actualDate.value,
+          confirmed: nodeConfirmed.value,
+        }),
+      }),
+    "节点已核销，沿用已核实任务凭证，无需再次提交审核",
+  );
+  if (!error.value) {
+    completionGuard.markSaved();
+    showCompletion.value = false;
+  }
 }
 onMounted(async () => {
   try {
@@ -161,6 +198,30 @@ onMounted(async () => {
     </template>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <OperationToast v-model="success" :busy="busy" />
+    <section v-if="detail.milestone_completion" class="notice" role="status">
+      <strong>{{ detail.milestone_completion.milestone_name }}</strong>
+      <p>
+        标准动作已核实 {{ detail.milestone_completion.completed_tasks }} /
+        {{ detail.milestone_completion.total_tasks }} 项
+      </p>
+      <p v-if="detail.milestone_completion.actual_date">
+        节点已核销，实际完成日期：{{ detail.milestone_completion.actual_date }}
+      </p>
+      <template v-else-if="detail.milestone_completion.ready">
+        <p>所有前置动作已达标，可沿用任务凭证确认节点实际完成。</p>
+        <ElButton
+          v-if="detail.milestone_completion.can_confirm"
+          type="primary"
+          :disabled="busy"
+          @click="openCompletion"
+          >一键核销节点</ElButton
+        >
+        <p v-else>
+          请由未参与任务反馈提交的项目审核人确认节点实际完成，无需重复录入凭证。
+        </p>
+      </template>
+      <p v-else>{{ detail.milestone_completion.reason }}</p>
+    </section>
     <p v-if="detail.requires_review" class="notice">
       来源变更需复核：{{
         detail.review_reason
@@ -369,5 +430,39 @@ onMounted(async () => {
         >关闭</ElButton
       ></template
     >
+  </Modal>
+  <Modal
+    v-if="showCompletion"
+    title="确认节点实际完成"
+    :busy="busy"
+    :before-close="completionGuard.confirmDiscard"
+    @close="showCompletion = false"
+  >
+    <p class="notice">
+      全部标准动作已核实。系统将沿用已有任务凭证，确认后直接核销节点，无需再次申请或审核。备好发票不代表款项到账，请确认节点本身确已完成。
+    </p>
+    <form id="complete-milestone" @submit.prevent="completeMilestone">
+      <label
+        >节点实际完成日期 *<FormDate
+          v-model="actualDate"
+          required
+          :disabled="busy"
+          aria-label="节点实际完成日期 *"
+      /></label>
+      <ElCheckbox v-model="nodeConfirmed" :disabled="busy"
+        >我已确认节点本身实际完成，沿用已核实的任务凭证核销</ElCheckbox
+      >
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
+    </form>
+    <template #footer="{ close }">
+      <ElButton :disabled="busy" @click="close">暂不核销</ElButton>
+      <ElButton
+        type="primary"
+        native-type="submit"
+        form="complete-milestone"
+        :disabled="busy || !actualDate || !nodeConfirmed"
+        >确认核销节点</ElButton
+      >
+    </template>
   </Modal>
 </template>

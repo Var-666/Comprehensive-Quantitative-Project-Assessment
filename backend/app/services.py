@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import func, inspect, select
+from sqlalchemy import func, inspect, literal, or_, select
 
 from .models import (
     ActualRecord,
@@ -55,6 +55,146 @@ def get(db, model, key, lock=False):
 def match(obj, version):
     if version != str(obj.row_version):
         fail(409, "STALE_VERSION", "记录已更新，请刷新后重试")
+
+
+def plan_item_ids(plan_id):
+    """Nearest node patch wins; exclusions also override inherited rows."""
+    lineage = (
+        select(PlanVersion.id, PlanVersion.base_version_id, literal(0).label("depth"))
+        .where(PlanVersion.id == plan_id)
+        .cte(recursive=True)
+    )
+    lineage = lineage.union_all(
+        select(
+            PlanVersion.id, PlanVersion.base_version_id, (lineage.c.depth + 1).label("depth")
+        ).join(lineage, PlanVersion.id == lineage.c.base_version_id)
+    )
+    ranked = (
+        select(
+            PlanItem.id,
+            func.row_number()
+            .over(partition_by=PlanItem.milestone_id, order_by=lineage.c.depth)
+            .label("priority"),
+        )
+        .join(lineage, PlanItem.plan_version_id == lineage.c.id)
+        .subquery()
+    )
+    return select(ranked.c.id).where(ranked.c.priority == 1)
+
+
+def plan_item(db, plan_id, milestone_id):
+    return db.scalar(
+        select(PlanItem).where(
+            PlanItem.id.in_(plan_item_ids(plan_id)), PlanItem.milestone_id == milestone_id
+        )
+    )
+
+
+def current_plan_item(db, project, item):
+    return bool(
+        project.current_plan_version_id
+        and db.scalar(
+            select(PlanItem.id).where(
+                PlanItem.id == item.id,
+                PlanItem.id.in_(plan_item_ids(project.current_plan_version_id)),
+                PlanItem.is_included.is_(True),
+            )
+        )
+    )
+
+
+def materialize_plan_item(db, item, plan_id):
+    if item.plan_version_id == plan_id:
+        return item
+    from .workflow_models import ActionLink
+
+    copied = PlanItem(
+        **{
+            column.key: getattr(item, column.key)
+            for column in inspect(item).mapper.column_attrs
+            if column.key not in ("id", "plan_version_id")
+        },
+        plan_version_id=plan_id,
+    )
+    db.add(copied)
+    db.flush()
+    for link in db.scalars(
+        select(ActionLink).where(
+            ActionLink.plan_item_id == item.id, ActionLink.status.in_(["active", "superseded"])
+        )
+    ):
+        db.add(
+            ActionLink(
+                milestone_id=link.milestone_id,
+                plan_item_id=copied.id,
+                template_item_id=link.template_item_id,
+                assigned_department_id=link.assigned_department_id,
+                snapshot_json=link.snapshot_json,
+                created_by=db.info.get("actor_id", "system"),
+            )
+        )
+    db.flush()
+    return copied
+
+
+def plan_changes(db, plan):
+    if not plan.base_version_id:
+        return {}
+    from .workflow_models import ActionLink
+
+    patches = list(db.scalars(select(PlanItem).where(PlanItem.plan_version_id == plan.id)))
+    if not patches:
+        return {}
+    previous = {
+        item.milestone_id: item
+        for item in db.scalars(
+            select(PlanItem).where(
+                PlanItem.id.in_(plan_item_ids(plan.base_version_id)),
+                PlanItem.milestone_id.in_([p.milestone_id for p in patches]),
+            )
+        )
+    }
+    actions = {}
+    for link in db.scalars(
+        select(ActionLink).where(
+            ActionLink.plan_item_id.in_([p.id for p in patches] + [p.id for p in previous.values()])
+        )
+    ):
+        actions.setdefault(link.plan_item_id, set()).add(link.template_item_id)
+    fields = (
+        "milestone_name",
+        "node_type_code",
+        "planned_date",
+        "date_kind",
+        "department_id",
+        "owner_id",
+        "source_ref",
+        "is_included",
+        "change_reason",
+    )
+    changes = {}
+    for item in patches:
+        old = previous.get(item.milestone_id)
+        changed_fields = [
+            key for key in fields if old is None or getattr(old, key) != getattr(item, key)
+        ]
+        if old and actions.get(old.id, set()) != actions.get(item.id, set()):
+            changed_fields.append("actions")
+        if not changed_fields:
+            continue
+        changes[item.milestone_id] = {
+            "kind": "removed"
+            if not item.is_included
+            else "added"
+            if old is None or not old.is_included
+            else "changed",
+            "old_date": old.planned_date.isoformat() if old else None,
+            "new_date": item.planned_date.isoformat(),
+            "delta_days": (item.planned_date - old.planned_date).days if old else None,
+            "fields": changed_fields,
+            "reason": item.change_reason,
+        }
+    return changes
 
 
 def audit(db, obj, action, request_id, before=None):
@@ -184,32 +324,6 @@ def create_plan(db, project_id, data, version, request_id):
     )
     db.add(plan)
     db.flush()
-    if base:
-        for item in db.scalars(select(PlanItem).where(PlanItem.plan_version_id == base.id)):
-            values = record(item)
-            for key in ("id", "plan_version_id"):
-                values.pop(key)
-            values["planned_date"] = item.planned_date
-            copied = PlanItem(**values, plan_version_id=plan.id)
-            db.add(copied)
-            db.flush()
-            from .workflow_models import ActionLink
-
-            for link in db.scalars(
-                select(ActionLink).where(
-                    ActionLink.plan_item_id == item.id, ActionLink.status == "active"
-                )
-            ):
-                db.add(
-                    ActionLink(
-                        milestone_id=link.milestone_id,
-                        plan_item_id=copied.id,
-                        template_item_id=link.template_item_id,
-                        assigned_department_id=link.assigned_department_id,
-                        snapshot_json=link.snapshot_json,
-                        created_by=db.info.get("actor_id", "system"),
-                    )
-                )
     project.row_version += 1
     audit(db, plan, "create_draft", request_id)
     return plan
@@ -261,15 +375,15 @@ def update_milestone(db, node_id, data, version, request_id):
     refs(db, data)
     if data.milestone_code != node.milestone_code:
         fail(422, "IMMUTABLE_CODE", "稳定节点编号不可变更")
-    item = db.scalar(
-        select(PlanItem).where(
-            PlanItem.milestone_id == node.id, PlanItem.plan_version_id == data.plan_version_id
-        )
-    )
+    item = plan_item(db, data.plan_version_id, node.id)
     if not item:
         fail(404, "PLAN_ITEM_NOT_FOUND", "节点不在该版本中")
     before = record(item)
-    for key, value in data.model_dump(exclude={"milestone_code", "plan_version_id"}).items():
+    values = data.model_dump(exclude={"milestone_code", "plan_version_id"})
+    if all(getattr(item, key) == value for key, value in values.items()):
+        return node
+    item = materialize_plan_item(db, item, data.plan_version_id)
+    for key, value in values.items():
         setattr(item, key, value)
     node.row_version += 1
     audit(db, item, "edit_draft", request_id, before)
@@ -292,6 +406,7 @@ def activate_plan(db, plan_id, version, approval_ref, request_id):
     if project.project_status == "archived" or plan.status != "draft":
         fail(409, "INVALID_STATE_TRANSITION", "仅未归档项目的草稿可批准生效")
     before = record(plan)
+    previous_plan_id = project.current_plan_version_id
     if project.current_plan_version_id:
         old = get(db, PlanVersion, project.current_plan_version_id)
         old_before = record(old)
@@ -307,6 +422,27 @@ def activate_plan(db, plan_id, version, approval_ref, request_id):
 
     from .config import settings
     from .workflow import invalidate_plan, scan_project
+    from .workflow_models import ActionLink, Reminder
+
+    # Restoring an older base needs fresh task references, never revived cancelled history.
+    for item in db.scalars(
+        select(PlanItem).where(
+            PlanItem.id.in_(plan_item_ids(plan.id)),
+            PlanItem.plan_version_id != plan.id,
+            PlanItem.id.not_in(plan_item_ids(previous_plan_id)),
+            or_(
+                select(Reminder.id)
+                .where(
+                    Reminder.milestone_plan_item_id == PlanItem.id, Reminder.status == "invalidated"
+                )
+                .exists(),
+                select(ActionLink.id)
+                .where(ActionLink.plan_item_id == PlanItem.id, ActionLink.status == "superseded")
+                .exists(),
+            ),
+        )
+    ):
+        materialize_plan_item(db, item, plan.id)
 
     invalidate_plan(db, project.id, "计划版本变更", request_id)
     db.flush()
@@ -318,7 +454,7 @@ def activate_plan(db, plan_id, version, approval_ref, request_id):
     return plan
 
 
-def milestone_detail(db, node, plan_id=None):
+def milestone_detail(db, node, plan_id=None, changes=None):
     result = record(node)
     project = get(db, Project, node.project_id)
     if not plan_id:
@@ -332,14 +468,15 @@ def milestone_detail(db, node, plan_id=None):
     plan = get(db, PlanVersion, plan_id)
     if plan.project_id != node.project_id:
         fail(422, "PLAN_PROJECT_MISMATCH", "版本不属于节点项目")
-    item = db.scalar(
-        select(PlanItem).where(
-            PlanItem.milestone_id == node.id, PlanItem.plan_version_id == plan_id
-        )
-    )
+    item = plan_item(db, plan_id, node.id)
     if not item:
         fail(404, "PLAN_ITEM_NOT_FOUND", "节点不在该版本中")
-    result["plan_item"] = record(item)
+    result["plan_item"] = {
+        **record(item),
+        "source_plan_version_id": item.plan_version_id,
+        "plan_version_id": plan_id,
+    }
+    result["plan_change"] = (plan_changes(db, plan) if changes is None else changes).get(node.id)
     result["milestone_name"] = item.milestone_name
     result["node_type_code"] = item.node_type_code
     result["department_name"] = (

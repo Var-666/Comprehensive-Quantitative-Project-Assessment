@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from . import auth
 from .config import settings
+from .delivery import deliver
 from .models import (
     ActualRecord,
     Credential,
@@ -20,7 +21,17 @@ from .models import (
     User,
     now,
 )
-from .services import audit, fail, get, record
+from .services import (
+    audit,
+    current_plan_item,
+    draft_plan,
+    fail,
+    get,
+    materialize_plan_item,
+    plan_item,
+    plan_item_ids,
+    record,
+)
 from .workflow_models import (
     ActionItem,
     ActionLink,
@@ -193,9 +204,39 @@ def link_actions(db, node, data, request_id):
     if project.project_status in ("archived", "completed") or node.lifecycle_status != "active":
         fail(409, "PROJECT_OR_NODE_INACTIVE", "已关闭项目或取消节点不能配置动作")
     item = get(db, PlanItem, data.plan_item_id)
-    plan = get(db, PlanVersion, item.plan_version_id)
-    if item.milestone_id != node.id or not item.is_included or plan.status == "superseded":
+    plan = get(
+        db,
+        PlanVersion,
+        data.plan_version_id
+        or (
+            project.current_plan_version_id
+            if current_plan_item(db, project, item)
+            else item.plan_version_id
+        ),
+    )
+    selected = plan_item(db, plan.id, node.id)
+    if (
+        plan.project_id != node.project_id
+        or not selected
+        or selected.id != item.id
+        or not item.is_included
+        or plan.status == "superseded"
+    ):
         fail(422, "INVALID_PLAN_ITEM", "请选择节点当前计划或草稿快照")
+    existing_ids = set(
+        db.scalars(
+            select(ActionLink.template_item_id).where(
+                ActionLink.plan_item_id == item.id, ActionLink.status == "active"
+            )
+        )
+    )
+    if set(data.template_item_ids) - existing_ids:
+        if plan.status == "draft":
+            draft_plan(db, plan.id, project.id)
+        inherited = item.plan_version_id != plan.id
+        item = materialize_plan_item(db, item, plan.id)
+        if inherited:
+            item.change_reason = f"标准动作调整：{plan.change_reason}"[:2000]
     links = []
     for key in dict.fromkeys(data.template_item_ids):
         action = get(db, ActionItem, key)
@@ -306,7 +347,7 @@ def scan_project(db, project, as_of, request_id=None, generate=False):
         ]
     for item in db.scalars(
         select(PlanItem)
-        .where(PlanItem.plan_version_id == plan.id, PlanItem.is_included.is_(True))
+        .where(PlanItem.id.in_(plan_item_ids(plan.id)), PlanItem.is_included.is_(True))
         .order_by(PlanItem.planned_date, PlanItem.id)
     ):
         node = get(db, Milestone, item.milestone_id)
@@ -445,7 +486,7 @@ def scan_project(db, project, as_of, request_id=None, generate=False):
                             f"{n + 1}. {link.snapshot_json['title']}；核实依据：{link.snapshot_json['completion_criteria']}"
                             for n, link in enumerate(links)
                         )
-                        + "\n本通知为确定性模板草稿，仅用于准备工作；不构成实际完成或收付款确认。"
+                        + "\n本通知按已批准规则自动发送，仅用于准备工作；不构成实际完成或收付款确认。"
                     )
                     notification = Notification(
                         project_id=project.id,
@@ -476,7 +517,8 @@ def scan_project(db, project, as_of, request_id=None, generate=False):
                             db.add(task)
                             audit(db, task, "generate_task", request_id)
                     audit(db, reminder, "generate_reminder", request_id)
-                    audit(db, notification, "generate_draft", request_id)
+                    audit(db, notification, "generate_notification", request_id)
+                    deliver(db, notification, "in_app", request_id)
                     row2["reminder_id"] = reminder.id
                 candidates.append(row2)
     return candidates
@@ -511,10 +553,24 @@ def invalidate(db, query, reason, request_id):
 
 
 def invalidate_plan(db, project_id, reason, request_id):
-    invalidate(db, select(Reminder).where(Reminder.project_id == project_id), reason, request_id)
+    project = get(db, Project, project_id)
+    retained = (
+        plan_item_ids(project.current_plan_version_id)
+        if (
+            project.current_plan_version_id
+            and project.project_status not in ("archived", "completed")
+        )
+        else None
+    )
+    query = select(Reminder).where(Reminder.project_id == project_id)
+    if retained is not None:
+        query = query.where(Reminder.milestone_plan_item_id.not_in(retained))
+    invalidate(db, query, reason, request_id)
+    links = select(ActionLink)
+    if retained is not None:
+        links = links.where(ActionLink.plan_item_id.not_in(retained))
     for link in db.scalars(
-        select(ActionLink)
-        .join(PlanItem, ActionLink.plan_item_id == PlanItem.id)
+        links.join(PlanItem, ActionLink.plan_item_id == PlanItem.id)
         .join(PlanVersion, PlanItem.plan_version_id == PlanVersion.id)
         .where(
             PlanVersion.project_id == project_id,
@@ -533,7 +589,7 @@ def live_notice(db, notice):
     node = get(db, Milestone, item.milestone_id)
     if (
         reminder.status == "invalidated"
-        or project.current_plan_version_id != item.plan_version_id
+        or not current_plan_item(db, project, item)
         or project.project_status in ("archived", "completed")
         or node.lifecycle_status != "active"
         or not item.is_included
@@ -564,7 +620,7 @@ def live_task(db, task):
     if (
         reminder.status == "invalidated"
         or link.status != "active"
-        or project.current_plan_version_id != item.plan_version_id
+        or not current_plan_item(db, project, item)
         or project.project_status in ("archived", "completed")
         or node.lifecycle_status != "active"
         or template.status != "approved"
@@ -615,4 +671,103 @@ def task_detail(db, obj):
             }
             for f in feedback
         ],
+    }
+
+
+def milestone_completion(db, task):
+    link = get(db, ActionLink, task.milestone_action_link_id)
+    item = get(db, PlanItem, link.plan_item_id)
+    node = get(db, Milestone, item.milestone_id)
+    project = get(db, Project, task.project_id)
+    links = list(
+        db.scalars(
+            select(ActionLink).where(
+                ActionLink.plan_item_id == item.id, ActionLink.status == "active"
+            )
+        )
+    )
+    tasks = list(
+        db.scalars(
+            select(Task)
+            .join(ReminderRule, Task.rule_version_id == ReminderRule.id)
+            .where(
+                Task.milestone_action_link_id.in_([action_link.id for action_link in links]),
+                ReminderRule.status == "approved",
+            )
+        )
+    )
+    feedback = list(
+        db.scalars(
+            select(Feedback)
+            .join(TaskVerification, TaskVerification.feedback_id == Feedback.id)
+            .where(
+                Feedback.task_id.in_([t.id for t in tasks]),
+                Feedback.status == "verified",
+                Feedback.claimed_completion.is_(True),
+                TaskVerification.decision == "accepted",
+            )
+        )
+    )
+    actuals = list(db.scalars(select(ActualRecord).where(ActualRecord.milestone_id == node.id)))
+    current = next(
+        (
+            a
+            for a in actuals
+            if a.is_current and a.completion_flag and a.verification_status == "verified"
+        ),
+        None,
+    )
+    completed = sum(t.status == "verified_done" and not t.requires_review for t in tasks)
+    missing = len(
+        {action_link.id for action_link in links} - {t.milestone_action_link_id for t in tasks}
+    )
+    reason = ""
+    if current:
+        reason = "节点已核实完成"
+    elif (
+        not current_plan_item(db, project, item)
+        or get(db, PlanVersion, project.current_plan_version_id).status != "effective"
+        or project.project_status in ("archived", "completed")
+        or node.lifecycle_status != "active"
+        or not item.is_included
+        or link.status != "active"
+        or task.id not in {t.id for t in tasks}
+    ):
+        reason = "节点或任务来源已变更"
+    elif (
+        not links or missing or not tasks or completed != len(tasks) or len(feedback) != len(tasks)
+    ):
+        reason = "标准动作尚未全部核实完成"
+    elif any(a.verification_status == "submitted" for a in actuals):
+        reason = "已有待核实的节点实际记录，请先处理"
+    elif any(get(db, Reminder, t.reminder_instance_id).status == "invalidated" for t in tasks):
+        reason = "任务来源已失效，请使用当前配置重新处理"
+    elif any(
+        not applicable(
+            get(
+                db,
+                ActionTemplate,
+                get(db, ActionItem, action_link.template_item_id).template_version_id,
+            ),
+            item,
+            project,
+        )
+        for action_link in links
+    ):
+        reason = "标准动作配置已变更"
+    principal = db.info["principal"]
+    independent = all(f.submitted_by != principal.user_id for f in feedback)
+    return {
+        "milestone_id": node.id,
+        "milestone_name": item.milestone_name,
+        "row_version": node.row_version,
+        "completed_tasks": completed,
+        "total_tasks": len(tasks) + missing,
+        "ready": not reason,
+        "can_confirm": not reason
+        and independent
+        and bool(auth.role(db, principal, project.id) & auth.ROLES["review"]),
+        "reason": reason,
+        "actual_date": current.actual_date.isoformat() if current else None,
+        "feedback_ids": [f.id for f in feedback],
     }

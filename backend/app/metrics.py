@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from .evaluation_models import MetricSnapshot
 from .models import ActualRecord, Department, Milestone, PlanItem, PlanVersion, now
-from .services import audit, fail, get, record
+from .services import audit, fail, get, plan_item_ids, record
 
 FORMULA = {
     "version": "trial_v1",
@@ -76,7 +76,7 @@ def calculate(db, project, as_of, plan_id=None):
         .join(Milestone, Milestone.id == PlanItem.milestone_id)
         .outerjoin(ActualRecord, ActualRecord.milestone_id == Milestone.id)
         .outerjoin(Department, Department.id == PlanItem.department_id)
-        .where(PlanItem.plan_version_id == plan.id)
+        .where(PlanItem.id.in_(plan_item_ids(plan.id)))
         .order_by(
             PlanItem.planned_date,
             Milestone.milestone_code,

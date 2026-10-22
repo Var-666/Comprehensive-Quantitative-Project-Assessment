@@ -207,7 +207,7 @@ async function run(generate = false) {
     scan.generated = generate ? r.generated : null;
     scan.previewed = true;
     if (generate)
-      success.value = `生成${r.generated}条提醒草稿；重复项已跳过。任务尚待人工分派。`;
+      success.value = `已发送${r.generated}条站内提醒；重复项已跳过。任务尚待人工分派。`;
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -249,10 +249,10 @@ onMounted(async () => {
   <div class="page-title">
     <div>
       <h1>提醒与待办</h1>
-      <p>按照计划日期与标准动作生成待办，重要通知先审核再发布</p>
+      <p>按已批准规则自动发送站内提醒并生成待办，对外正式函件仍需审批</p>
     </div>
     <ElButton type="primary" class="primary" @click="switchTab('scan')">
-      <Icon name="imgVectorPlus" />手动创建提醒
+      <Icon name="imgVectorPlus" />预览与补充扫描
     </ElButton>
   </div>
   <div class="workbench-toolbar">
@@ -353,7 +353,7 @@ onMounted(async () => {
   <div v-if="tab === 'notices'" class="workflow-split notice-split">
     <section class="card queue">
       <h3>
-        待办通知队列 <span class="badge">共{{ notices.total }}条</span>
+        通知记录 <span class="badge">共{{ notices.total }}条</span>
       </h3>
       <p v-if="!notices.items.length && !busy" class="empty">
         暂无通知。可先配置标准动作和规则，再预览提醒扫描。
@@ -415,7 +415,13 @@ onMounted(async () => {
         </p>
         <p>来源：{{ selected.fact_snapshot_json.source_ref }}</p>
       </div>
-      <h3>通知内容（确定性模板草稿） · 第{{ selected.draft_version }}版</h3>
+      <h3>通知内容 · 第{{ selected.draft_version }}版</h3>
+      <p
+        v-if="selected.status !== 'sent' && selected.status !== 'invalidated'"
+        class="notice"
+      >
+        此为历史流程遗留草稿；新触发的规则提醒会直接投递站内收件箱。
+      </p>
       <p v-if="editable" class="notice warning">
         {{ aiConfig?.mode_label }} · AI
         仅整理已批准来源事实，不能改变提醒日期或核实状态。
@@ -520,10 +526,10 @@ onMounted(async () => {
         >
       </div>
       <p class="muted">
-        审核通过仅表示内容审批。站内发布需单独操作；外部邮件、短信和企业消息渠道未启用。计划变更会作废未发送旧稿，已发布历史保留。
+        已批准规则触发后自动投递站内收件箱，无需逐条审核或发布。外部邮件、短信和企业消息渠道未启用；对外正式函件仍需审批。计划变更会作废未发送旧稿，已发布历史保留。
       </p>
       <details>
-        <summary>生成与审核记录</summary>
+        <summary>生成与投递记录</summary>
         <p>生成方式：确定性模板，不是AI输出</p>
         <p v-for="(r, i) in selected.reviews" :key="i">
           第{{ r.draft_version }}版 · {{ label(r.decision) }} ·
@@ -534,12 +540,13 @@ onMounted(async () => {
         </p>
       </details>
     </section>
-    <section v-else class="card empty">请选择一条通知查看依据与草稿。</section>
+    <section v-else class="card empty">
+      请选择一条通知查看依据与投递记录。
+    </section>
   </div>
   <section v-if="tab === 'tasks'" class="card table-card">
     <div class="section-title">
       <h3>标准动作执行任务</h3>
-      <span class="muted">共{{ tasks.total }}项 · 任务完成不自动完成节点</span>
     </div>
     <div class="table-wrap">
       <table>
@@ -591,7 +598,7 @@ onMounted(async () => {
   <section v-if="tab === 'inbox'" class="card workflow-detail">
     <h3>我的站内消息</h3>
     <p v-if="!inbox.length && !busy" class="empty">
-      暂无已发布给您的消息。审核通过的待发送草稿不会出现在这里。
+      暂无消息。已批准规则触发后，站内提醒会自动出现在这里。
     </p>
     <section v-for="m in inbox" :key="m.id" class="form-section">
       <div class="section-title">
@@ -606,7 +613,7 @@ onMounted(async () => {
   <section v-if="tab === 'scan'" class="card workflow-detail">
     <h3>提醒扫描预览与生成</h3>
     <p class="notice">
-      先预览确定性计算结果，再显式生成草稿与待办。自动扫描进程使用当前业务日期；此处开发/测试环境可选模拟日期，正式环境只能生成当天结果。
+      后台按已批准规则自动发送站内提醒并生成待办。此处可预览或补充扫描，确认后立即投递，无需逐条审核或发布。自动扫描进程使用当前业务日期；开发/测试环境可选模拟日期，正式环境只能生成当天结果。
     </p>
     <ElForm
       ref="scanForm"
@@ -671,12 +678,12 @@ onMounted(async () => {
           :disabled="busy || !scan.previewed || !auth.user?.is_system_admin"
           @click="run(true)"
         >
-          确认生成草稿与待办
+          确认发送提醒并生成待办
         </ElButton>
       </div>
     </ElForm>
     <p v-if="scan.generated !== null" class="success" role="status">
-      本次生成{{ scan.generated }}条，未自动审核或发送。
+      本次已发送{{ scan.generated }}条站内提醒，并生成待办；重复项已跳过。
     </p>
     <div v-if="scan.previewed" class="table-wrap">
       <table>

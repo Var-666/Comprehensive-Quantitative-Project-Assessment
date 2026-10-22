@@ -27,6 +27,7 @@ export interface Plan {
   created_at: string;
   source_ref: string | null;
   editor_ids: string[];
+  base_version_id: string | null;
 }
 export interface PlanItem {
   id: string;
@@ -64,6 +65,14 @@ export interface Milestone {
   actual_records: Actual[];
   current_actual: Actual | null;
   verification_status: string;
+  plan_change?: {
+    kind: "added" | "changed" | "removed";
+    old_date: string | null;
+    new_date: string;
+    delta_days: number | null;
+    fields: string[];
+    reason: string;
+  } | null;
   history?: PlanItem[];
   audit_events?: Audit[];
 }

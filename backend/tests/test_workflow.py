@@ -1,11 +1,21 @@
 """Phase two tests protect review boundaries, facts and deterministic generation."""
 
 from datetime import date, timedelta
+from unittest.mock import patch
 
+import pytest
 from sqlalchemy import func, select
 
 from app.models import ActualRecord
-from app.workflow_models import ActionLink, Feedback, InboxMessage, Notification, Reminder, Task
+from app.workflow_models import (
+    ActionLink,
+    DeliveryAttempt,
+    Feedback,
+    InboxMessage,
+    Notification,
+    Reminder,
+    Task,
+)
 from conftest import REVIEWER_ID, VIEWER_ID, as_reviewer, login_as
 from test_phase1 import create, node_payload
 
@@ -52,7 +62,7 @@ def template_payload():
     }
 
 
-def setup_workflow(client, recipient="admin", catch_up=0):
+def setup_workflow(client, recipient="admin", catch_up=0, action_count=1):
     p, plan = create(client)
     node = data(
         client.post(
@@ -61,14 +71,19 @@ def setup_workflow(client, recipient="admin", catch_up=0):
         ),
         201,
     )
-    template = data(client.post("/api/v1/action-templates", json=template_payload()), 201)
+    payload = template_payload()
+    payload["items"].extend(
+        {**payload["items"][0], "item_code": str(i + 1), "title": f"整理资料{i + 1}"}
+        for i in range(1, action_count)
+    )
+    template = data(client.post("/api/v1/action-templates", json=payload), 201)
     approval(client, "action-templates", template)
     links = data(
         client.post(
             f"/api/v1/milestones/{node['id']}/action-links",
             json={
                 "plan_item_id": node["plan_item"]["id"],
-                "template_item_ids": [template["items"][0]["id"]],
+                "template_item_ids": [i["id"] for i in template["items"]],
             },
         )
     )
@@ -110,6 +125,12 @@ def scan(client, p, day="2026-10-19", generate=True):
 
 def first_notice(client):
     return client.get("/api/v1/notifications").json()["data"]["items"][0]
+
+
+def scan_legacy(client, project):
+    # Reproduce pre-upgrade drafts to keep the historical editing/review contract covered.
+    with patch("app.workflow.deliver"):
+        return scan(client, project)
 
 
 def submit_notice(client, notice):
@@ -180,6 +201,7 @@ def test_natural_day_preview_and_generation_are_deterministic_idempotent(client,
     assert preview["items"][0]["trigger_date"] == "2026-10-19"
     with factory() as db:
         assert db.scalar(select(func.count()).select_from(Reminder)) == 0
+        assert db.scalar(select(func.count()).select_from(InboxMessage)) == 0
     assert data(scan(client, p))["generated"] == 1
     assert data(scan(client, p))["generated"] == 0
     assert (
@@ -189,8 +211,13 @@ def test_natural_day_preview_and_generation_are_deterministic_idempotent(client,
     with factory() as db:
         assert db.scalar(select(func.count()).select_from(Task)) == 1
         assert db.scalar(select(func.count()).select_from(Notification)) == 1
+        assert db.scalar(select(func.count()).select_from(InboxMessage)) == 1
+        assert db.scalar(select(func.count()).select_from(DeliveryAttempt)) == 1
         assert db.scalar(select(func.count()).select_from(ActualRecord)) == 0
     notice = first_notice(client)
+    assert notice["status"] == "sent" and notice["reviews"] == []
+    assert len(notice["deliveries"]) == 1
+    assert len(data(client.get("/api/v1/inbox"))) == 1
     assert notice["fact_snapshot_json"]["generation_mode"] == "deterministic_template"
     assert notice["fact_snapshot_json"]["source_ref"] == "已录入计划来源"
 
@@ -252,10 +279,10 @@ def test_workday_requires_approved_explicit_enterprise_calendar(client):
     )
 
 
-def test_notice_review_is_not_delivery_and_external_channels_are_disabled(client, factory):
-    """TC010: content approval never fabricates a sent receipt."""
+def test_legacy_notice_review_is_not_delivery_and_external_channels_are_disabled(client, factory):
+    """Historical drafts retain their existing review and delivery contract."""
     p, _, _, _, _ = setup_workflow(client)
-    data(scan(client, p))
+    data(scan_legacy(client, p))
     notice = submit_notice(client, first_notice(client))
     body = {"draft_version": notice["draft_version"], "decision": "approved", "comment": "内容确认"}
     url = f"/api/v1/notifications/{notice['id']}"
@@ -413,7 +440,7 @@ def test_version_change_invalidates_drafts_preserves_sent_history_and_rebinds(
                 json={"approval_ref": "新版确认"},
             )
         )
-    assert data(client.get(f"/api/v1/notifications/{old_notice['id']}"))["status"] == "invalidated"
+    assert data(client.get(f"/api/v1/notifications/{old_notice['id']}"))["status"] == "sent"
     assert data(client.get(f"/api/v1/tasks/{task['id']}"))["requires_review"] is True
     assert data(scan(client, p, "2026-10-21"))["generated"] == 1
     with factory() as db:
@@ -471,7 +498,7 @@ def test_authorization_scopes_and_unassigned_execution_are_enforced(client):
 def test_rule_replacement_invalidates_stale_draft_without_overwriting_version(client):
     """Only one version of a logical rule may be approved, and old drafts cannot stay actionable."""
     p, _, _, old, _ = setup_workflow(client)
-    data(scan(client, p))
+    data(scan_legacy(client, p))
     notice = first_notice(client)
     new = data(
         client.post(
@@ -506,26 +533,8 @@ def test_cancelled_node_stops_reminders_and_preserves_sent_notice(client):
     """TC016: sent history remains intact while a cancelled node cannot generate new work."""
     p, node, _, _, _ = setup_workflow(client)
     data(scan(client, p))
-    notice = submit_notice(client, first_notice(client))
-    with as_reviewer(client):
-        notice = data(
-            client.post(
-                f"/api/v1/notifications/{notice['id']}/review",
-                headers={"If-Match": str(notice["row_version"])},
-                json={
-                    "draft_version": notice["draft_version"],
-                    "decision": "approved",
-                    "comment": "确认",
-                },
-            )
-        )
-    sent = data(
-        client.post(
-            f"/api/v1/notifications/{notice['id']}/dispatch",
-            headers={"If-Match": str(notice["row_version"])},
-            json={"channel": "in_app"},
-        )
-    )
+    notice = sent = first_notice(client)
+    assert sent["status"] == "sent" and sent["reviews"] == []
     node = data(client.get(f"/api/v1/milestones/{node['id']}"))
     data(
         client.post(
@@ -606,12 +615,14 @@ def test_concurrent_scans_never_duplicate_tasks_or_notifications(client, factory
         assert db.scalar(select(func.count()).select_from(Reminder)) == 1
         assert db.scalar(select(func.count()).select_from(Task)) == 1
         assert db.scalar(select(func.count()).select_from(Notification)) == 1
+        assert db.scalar(select(func.count()).select_from(InboxMessage)) == 1
+        assert db.scalar(select(func.count()).select_from(DeliveryAttempt)) == 1
 
 
-def test_worker_automatically_generates_drafts_but_never_approves_or_sends(
+def test_worker_automatically_delivers_reminders_without_per_notice_approval(
     client, factory, monkeypatch
 ):
-    """The periodic job may prepare work, but only authenticated humans can approve and publish."""
+    """Approved rules deliver directly to recipients without human login or duplicate delivery."""
     from datetime import datetime, timezone
 
     from app import worker
@@ -621,9 +632,109 @@ def test_worker_automatically_generates_drafts_but_never_approves_or_sends(
     assert worker.run_once(factory) == 1
     assert worker.run_once(factory) == 0
     notice = first_notice(client)
-    assert notice["status"] == "draft" and notice["reviews"] == [] and notice["deliveries"] == []
+    assert notice["status"] == "sent" and notice["reviews"] == []
+    assert len(notice["deliveries"]) == 1
+    assert notice["deliveries"][0]["attempt_state"] == "delivered"
+    inbox = data(client.get("/api/v1/inbox"))
+    assert len(inbox) == 1 and inbox[0]["notification_id"] == notice["id"]
+    url = f"/api/v1/notifications/{notice['id']}"
+    for suffix, payload in (
+        ("/draft", {"title": "改写", "body": "发送后不可改"}),
+        ("/ai-draft", {}),
+        ("/submit-review", None),
+        ("/dispatch", {"channel": "email"}),
+    ):
+        response = client.request(
+            "PATCH" if suffix == "/draft" else "POST",
+            url + suffix,
+            headers={"If-Match": str(notice["row_version"])},
+            json=payload,
+        )
+        assert response.status_code == 409
+    data(
+        client.post(
+            url + "/dispatch",
+            headers={"If-Match": str(notice["row_version"])},
+            json={"channel": "in_app"},
+        )
+    )
+    with as_reviewer(client):
+        assert data(client.get("/api/v1/inbox")) == []
+        assert client.post(f"/api/v1/inbox/{inbox[0]['id']}/read").status_code == 404
     with factory() as db:
-        assert db.scalar(select(func.count()).select_from(InboxMessage)) == 0
+        assert db.scalar(select(func.count()).select_from(InboxMessage)) == 1
+        assert db.scalar(select(func.count()).select_from(DeliveryAttempt)) == 1
+
+
+def test_failed_automatic_delivery_rolls_back_generation_and_can_retry(
+    client, factory, monkeypatch
+):
+    from datetime import datetime, timezone
+
+    from app import worker
+
+    setup_workflow(client)
+    monkeypatch.setattr(worker, "now", lambda: datetime(2026, 10, 19, tzinfo=timezone.utc))
+    from app.delivery import deliver
+
+    def fail_after_delivery(*args):
+        deliver(*args)
+        raise RuntimeError("delivery failed")
+
+    with patch("app.workflow.deliver", side_effect=fail_after_delivery):
+        with pytest.raises(RuntimeError, match="delivery failed"):
+            worker.run_once(factory)
+    with factory() as db:
+        for model in (Reminder, Notification, Task, InboxMessage, DeliveryAttempt):
+            assert db.scalar(select(func.count()).select_from(model)) == 0
+    assert worker.run_once(factory) == 1
+    assert len(data(client.get("/api/v1/inbox"))) == 1
+
+
+@pytest.mark.parametrize("blocked", ["rule", "plan", "account", "membership"])
+def test_worker_cannot_deliver_without_approved_sources_and_active_recipient(
+    client, factory, monkeypatch, blocked
+):
+    from datetime import datetime, timezone
+
+    from app import worker
+    from app.models import Credential, PlanVersion, ProjectMember
+    from app.workflow_models import ReminderRule
+
+    p, _, _, rule, _ = setup_workflow(client)
+    with factory.begin() as db:
+        if blocked == "rule":
+            db.get(ReminderRule, rule["id"]).status = "draft"
+        elif blocked == "plan":
+            plan = db.scalar(select(PlanVersion).where(PlanVersion.project_id == p["id"]))
+            plan.status = "draft"
+        elif blocked == "account":
+            db.scalar(select(Credential).where(Credential.user_id == ADMIN_ID)).enabled = False
+        else:
+            db.scalar(
+                select(ProjectMember).where(
+                    ProjectMember.project_id == p["id"],
+                    ProjectMember.user_id == ADMIN_ID,
+                    ProjectMember.role_code == "admin",
+                )
+            ).active = False
+    monkeypatch.setattr(worker, "now", lambda: datetime(2026, 10, 19, tzinfo=timezone.utc))
+    assert worker.run_once(factory) == 0
+    with factory() as db:
+        for model in (Reminder, Notification, Task, InboxMessage, DeliveryAttempt):
+            assert db.scalar(select(func.count()).select_from(model)) == 0
+
+
+def test_plan_activation_also_delivers_due_reminders(client, monkeypatch):
+    from datetime import datetime, timezone
+
+    from app import services
+
+    monkeypatch.setattr(services, "now", lambda: datetime(2026, 10, 19, tzinfo=timezone.utc))
+    p, *_ = setup_workflow(client)
+    assert first_notice(client)["status"] == "sent"
+    assert len(data(client.get("/api/v1/inbox"))) == 1
+    assert data(scan(client, p))["generated"] == 0
 
 
 def test_rule_replacement_recreates_cancelled_tasks_for_new_rule_but_not_each_recipient(client):

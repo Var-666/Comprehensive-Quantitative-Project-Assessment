@@ -2,7 +2,14 @@
 import OperationToast from "../components/OperationToast.vue";
 import PageNavigation from "../components/PageNavigation.vue";
 import StatCard from "../components/StatCard.vue";
-import { Calendar, TrendCharts, Warning, Clock } from "@element-plus/icons-vue";
+import {
+  Calendar,
+  TrendCharts,
+  Warning,
+  Clock,
+  InfoFilled,
+  ArrowRight,
+} from "@element-plus/icons-vue";
 import FormDate from "../components/FormDate.vue";
 import { ElButton } from "element-plus/es/components/button/index";
 import FormSelect from "../components/FormSelect.vue";
@@ -303,8 +310,7 @@ onMounted(async () => {
             /><strong>{{ item.value }}</strong>
           </div></template
         ><template v-else
-          ><p class="muted">完成事实核实覆盖率 · 按类型分组，完整列表可滚动</p>
-          <div
+          ><div
             v-for="g in data?.groups"
             :key="g.node_type_code"
             class="metric-bar-row"
@@ -321,36 +327,51 @@ onMounted(async () => {
           </div></template
         >
       </section>
-      <section class="card metric-panel">
-        <h3>评价说明与数据质量</h3>
-        <p>
-          已核实逾期未完成：<strong>{{
-            counts.confirmed_overdue_unfinished
-          }}</strong
-          >，单独列示，不进入试算按期率分母。
-        </p>
-        <p>
-          完成事实核实覆盖率：<strong>{{
-            counts.completion_verification_coverage_pct === null
-              ? "—"
-              : `${counts.completion_verification_coverage_pct}%`
-          }}</strong>
-        </p>
-        <p class="muted">{{ data?.formula.boundary }}</p>
+      <section
+        class="card metric-panel metric-quality"
+        aria-labelledby="quality-title"
+      >
+        <h3 id="quality-title">评价说明与数据质量</h3>
+        <div class="quality-stats">
+          <div class="quality-stat">
+            <span>完成事实核实覆盖率</span>
+            <strong class="quality-value coverage-value">{{
+              counts.completion_verification_coverage_pct === null
+                ? "—"
+                : `${counts.completion_verification_coverage_pct}%`
+            }}</strong>
+            <progress
+              v-if="counts.completion_verification_coverage_pct !== null"
+              class="quality-coverage"
+              :value="Number(counts.completion_verification_coverage_pct)"
+              max="100"
+              aria-label="完成事实核实覆盖率"
+            />
+          </div>
+          <div class="quality-stat">
+            <span>已核实逾期未完成</span>
+            <strong class="quality-value overdue-value">{{
+              counts.confirmed_overdue_unfinished
+            }}</strong>
+          </div>
+        </div>
+        <div class="quality-note">
+          <InfoFilled class="icon" aria-hidden="true" />
+          <p>逾期未完成单独列示，不计入试算按期率分母。</p>
+        </div>
         <ElButton
-          class="text-button"
+          class="text-button quality-basis"
           @click="formula = true"
-          native-type="submit"
+          native-type="button"
           link
         >
-          查看评价口径与数据依据 →
+          查看评价口径与数据依据 <ArrowRight class="icon" aria-hidden="true" />
         </ElButton>
       </section>
     </div>
     <section v-if="!selected" class="card table-card">
       <div class="section-title">
         <h3>项目评价列表</h3>
-        <span class="muted">统计截止 {{ loadedAsOf }} · trial_v1</span>
       </div>
       <div class="table-wrap">
         <table class="metric-list-table">

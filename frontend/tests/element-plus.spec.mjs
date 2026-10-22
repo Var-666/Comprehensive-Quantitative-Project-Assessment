@@ -100,7 +100,7 @@ test('Element calendar submits business date strings and invalidates an earlier 
   await page.locator('.el-select').filter({ has: project }).click();
   await page.getByRole('option', { name: /P-H028/ }).click();
   const date = page.getByLabel('统计 / 扫描日期 *', { exact: true });
-  const generate = page.getByRole('button', { name: '确认生成草稿与待办', exact: true });
+  const generate = page.getByRole('button', { name: '确认发送提醒并生成待办', exact: true });
   await expect(generate).toBeDisabled();
   for (const width of [1440, 1280, 1024]) {
     await page.setViewportSize({ width, height: 900 });

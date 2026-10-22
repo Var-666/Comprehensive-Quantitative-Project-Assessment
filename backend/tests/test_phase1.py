@@ -187,7 +187,7 @@ def test_project_pagination_has_no_missing_or_repeated_rows(client):
     assert len({p["id"] for p in first["items"] + second["items"]}) == 4
 
 
-def test_plan_snapshots_are_immutable_and_full_copy(client, factory):
+def test_plan_snapshots_are_immutable_and_store_only_changed_nodes(client, factory):
     """A schedule change must preserve the old date and unchanged nodes for traceability."""
     p, plan = create(client)
     for code in ("N-001", "N-002"):
@@ -243,7 +243,7 @@ def test_plan_snapshots_are_immutable_and_full_copy(client, factory):
                 .select_from(PlanItem)
                 .where(PlanItem.plan_version_id == draft["id"])
             )
-            == 2
+            == 1
         )
     assert (
         client.patch(

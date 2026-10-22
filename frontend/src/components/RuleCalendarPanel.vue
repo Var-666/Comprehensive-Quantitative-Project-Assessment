@@ -248,7 +248,7 @@ onMounted(load);
   <p v-if="busy && !show" class="empty" role="status">正在加载配置…</p>
   <template v-if="kind === 'rules'">
     <p class="notice">
-      提前天数、追补窗口和接收角色逐条配置；默认追补0天表示仅在触发当天生成一次。只有生效计划、已批准动作及规则共同满足条件时才生成草稿。
+      提前天数、追补窗口和接收角色逐条配置；默认追补0天表示仅在触发当天发送一次。只有生效计划、已批准动作及规则共同满足条件时才自动发送站内提醒，无需逐条审核或发布。
     </p>
     <p v-if="!rules.length && !busy" class="empty">尚未配置提醒规则。</p>
     <section v-for="rule in rules" :key="rule.id" class="card workflow-config">

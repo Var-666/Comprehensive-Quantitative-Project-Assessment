@@ -110,6 +110,17 @@ export interface TaskRecord {
   review_reason: string | null;
   action_snapshot_json: ActionItem;
   feedback: TaskFeedback[];
+  milestone_completion?: {
+    milestone_id: string;
+    milestone_name: string;
+    row_version: number;
+    completed_tasks: number;
+    total_tasks: number;
+    ready: boolean;
+    can_confirm: boolean;
+    reason: string;
+    actual_date: string | null;
+  };
 }
 export interface InboxRecord {
   id: string;

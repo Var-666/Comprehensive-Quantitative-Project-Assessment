@@ -126,7 +126,6 @@ onMounted(load);
         <section class="card overview-trend" aria-labelledby="trend-title">
           <div class="section-title">
             <h3 id="trend-title">节点履约趋势</h3>
-            <span class="muted">最近 6 个完整自然月 · 按期 / 延期完成</span>
           </div>
           <div
             v-if="hasHistory"
@@ -176,7 +175,6 @@ onMounted(load);
         </section>
         <section class="card overview-todos" aria-labelledby="todo-title">
           <h3 id="todo-title">近期待办事项</h3>
-          <p class="muted">未完成任务按截止日期排序</p>
           <RouterLink
             v-for="task in dashboard.upcoming_tasks"
             :key="task.id"
@@ -202,11 +200,7 @@ onMounted(load);
       <section class="card table-card overview-projects">
         <div class="section-title">
           <h3>重点项目进展</h3>
-          <span class="muted"
-            >按项目编号展示前 5 项 · 截止 {{ dashboard.as_of_date }}</span
-          ><RouterLink class="text-button" to="/projects"
-            >全部项目 →</RouterLink
-          >
+          <RouterLink class="text-button" to="/projects">全部项目 →</RouterLink>
         </div>
         <div v-if="dashboard.projects.length" class="table-wrap">
           <table>

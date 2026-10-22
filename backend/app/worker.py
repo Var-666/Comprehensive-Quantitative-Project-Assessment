@@ -48,7 +48,7 @@ def run_once(factory=SessionLocal):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="只生成草稿和待办，不自动审核或发送")
+    parser = argparse.ArgumentParser(description="按已批准规则自动发送站内提醒并生成待办")
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--interval", type=int, default=60)
     args = parser.parse_args()
