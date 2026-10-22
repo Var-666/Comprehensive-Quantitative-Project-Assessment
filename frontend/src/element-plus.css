@@ -1,0 +1,287 @@
+/* Element Plus follows the existing Figma tokens. Only library components are scoped here. */
+:root {
+  --el-color-primary: var(--blue);
+  --el-color-primary-light-3: #7196df;
+  --el-color-primary-light-5: #9bb9ee;
+  --el-color-primary-light-7: #d5e3fa;
+  --el-color-primary-light-9: var(--light);
+  --el-color-primary-dark-2: #2858b7;
+  --el-color-success: var(--green);
+  --el-color-warning: var(--amber);
+  --el-color-danger: var(--red);
+  --el-text-color-primary: var(--ink);
+  --el-text-color-regular: var(--ink);
+  --el-text-color-secondary: var(--muted);
+  --el-border-color: var(--line);
+  --el-border-color-light: var(--line);
+  --el-border-radius-base: var(--control-radius);
+  --el-font-family: inherit;
+  --el-font-size-base: 12px;
+  --el-component-size: 40px;
+}
+.el-button {
+  --el-button-size: 36px;
+  font-family: inherit;
+}
+.el-button + .el-button {
+  margin-left: 0;
+}
+.el-textarea__inner {
+  font: inherit;
+  min-height: 64px;
+}
+.el-tag.badge {
+  height: auto;
+  border: 0;
+}
+.el-checkbox {
+  flex-direction: row;
+  gap: 0;
+  height: auto;
+  min-height: 32px;
+  margin-right: 0;
+  max-width: 100%;
+}
+.el-checkbox__label {
+  white-space: normal;
+  line-height: 1.6;
+  font-size: 12px;
+}
+.el-checkbox__original {
+  padding: 0;
+  min-height: 0;
+}
+.ui-select-field,
+.ui-date-field {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+.ui-select-field .el-select,
+.ui-date-field .el-date-editor {
+  width: 100%;
+}
+.ui-validity-proxy {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.ui-field-error {
+  display: block;
+  color: var(--el-color-danger);
+  margin-top: 4px;
+  font-size: 12px;
+}
+.is-invalid .el-select__wrapper,
+.is-invalid .el-input__wrapper {
+  box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+.filters .ui-select-field,
+.filters .ui-date-field {
+  width: 180px;
+  max-width: 100%;
+}
+.filters .inline-label .ui-select-field {
+  width: 120px;
+}
+.filters .inline-label > .el-input {
+  width: 100px;
+}
+.project-strip .ui-select-field {
+  width: 220px;
+  max-width: 100%;
+}
+.project-strip .ui-select-field:has([aria-label="计划版本"]) {
+  width: 150px;
+}
+.search .el-input__wrapper {
+  padding-left: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ui-pagination {
+  flex-wrap: wrap;
+}
+.ui-pagination .el-pagination span {
+  margin: 0;
+}
+.ui-pagination .el-pagination button {
+  min-width: 64px;
+  height: 36px;
+  padding: 0 10px;
+}
+.ui-pagination .el-pager li {
+  height: 36px;
+  min-width: 36px;
+}
+.ui-modal-overlay {
+  background: #17233838;
+  overflow: hidden;
+}
+.ui-modal-overlay .el-overlay-dialog {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.el-dialog.modal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  left: 0;
+  width: var(--ui-modal-width);
+  max-width: calc(100% - 40px);
+  padding: 0;
+  background: white;
+}
+.el-drawer.modal {
+  padding: 0;
+}
+.modal.task-drawer {
+  --ui-drawer-width: 600px;
+}
+.modal.metric-formula-drawer {
+  --ui-drawer-width: 620px;
+}
+.modal.metric-evidence-drawer {
+  --ui-drawer-width: 640px;
+}
+.modal > .el-dialog__header,
+.modal > .el-drawer__header,
+.modal > .el-dialog__footer,
+.modal > .el-drawer__footer {
+  padding: 0;
+  margin: 0;
+}
+.modal > .el-dialog__body,
+.modal > .el-drawer__body {
+  padding: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal .modal-body {
+  flex: 1;
+}
+@media (min-width: 761px) {
+  .ui-workspace-overlay,
+  .ui-workspace-overlay .el-overlay-dialog {
+    left: var(--sidebar-width);
+  }
+}
+.el-button > span {
+  gap: 7px;
+}
+.llm-select-trigger.el-button > span,
+.llm-model-options > .el-button > span {
+  width: 100%;
+  min-width: 0;
+  justify-content: space-between;
+  white-space: normal;
+}
+.llm-model-options > .el-button {
+  height: auto;
+}
+.el-select .el-select__input,
+.el-input .el-input__inner {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  outline: none;
+  font: inherit;
+}
+.el-select .el-select__input:focus,
+.el-input .el-input__inner:focus {
+  outline: none;
+}
+.el-select__wrapper,
+.el-input__wrapper {
+  font-family: inherit;
+  font-size: 12px;
+}
+.workbench-toolbar .work-project-select {
+  width: 190px;
+  flex: 0 0 190px;
+}
+.workbench-toolbar .work-status-select {
+  width: 130px;
+  flex: 0 0 130px;
+}
+.workbench-toolbar .el-select__wrapper {
+  min-height: 36px;
+}
+.work-scan-form .el-form-item {
+  margin-bottom: 0;
+  min-width: 0;
+}
+.work-scan-form .el-form-item__label {
+  font-family: inherit;
+  line-height: 20px;
+  padding: 0;
+  height: auto;
+}
+.work-scan-form .el-select__wrapper {
+  min-height: 40px;
+}
+.workspace-tasks .work-scan-form .el-date-editor {
+  width: 100%;
+}
+.work-scan-form > .actions {
+  align-self: end;
+}
+.work-pagination {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  white-space: normal;
+}
+.work-pagination .btn-prev,
+.work-pagination .btn-next,
+.work-pagination .el-pager li {
+  height: 36px;
+  min-width: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--control-radius);
+  font-size: 12px;
+}
+.work-pagination .el-pager li.is-active {
+  background: var(--light);
+  border-color: var(--blue);
+}
+.project-element-popper {
+  max-width: calc(100vw - 24px);
+  font-family: inherit;
+}
+.project-element-popper table {
+  min-width: 0;
+}
+.project-element-popper .el-select-dropdown__item {
+  height: auto;
+  min-height: 36px;
+  line-height: 20px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.project-element-popper .el-picker-panel__icon-btn {
+  min-height: 24px;
+  width: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+}

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
+import FormSelect from "./FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import { ElCheckbox } from "element-plus/es/components/checkbox/index";
+import { ElInput } from "element-plus/es/components/input/index";
+import FormDate from "./FormDate.vue";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useAuth, useCatalog } from "../store";
@@ -145,18 +151,23 @@ onMounted(load);
     <div class="section-title">
       <h3>计划与实际收付款</h3>
       <div class="actions">
-        <button v-if="manager" @click="mode = 'access'">财务额外授权</button
-        ><button
+        <ElButton v-if="manager" @click="mode = 'access'" native-type="submit"
+          >财务额外授权</ElButton
+        ><ElButton
           v-if="me?.can_write && auth.can(projectId)"
           @click="open('plan')"
+          native-type="submit"
         >
-          录入财务计划</button
-        ><button
+          录入财务计划</ElButton
+        ><ElButton
           v-if="me?.can_write && auth.can(projectId)"
           @click="open('actual')"
+          native-type="submit"
         >
-          录入实际收付款</button
-        ><button :disabled="busy" @click="load">刷新财务记录</button>
+          录入实际收付款</ElButton
+        ><ElButton :disabled="busy" @click="load" native-type="submit"
+          >刷新财务记录</ElButton
+        >
       </div>
     </div>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -245,7 +256,7 @@ onMounted(load);
                 }}<small class="block muted">{{ a.evidence_ref }}</small>
               </td>
               <td>
-                <button
+                <ElButton
                   v-if="
                     a.verification_status === 'submitted' &&
                     me.can_verify &&
@@ -257,9 +268,10 @@ onMounted(load);
                     comment = '';
                     decision = 'verified';
                   "
+                  native-type="submit"
                 >
                   独立财务核实
-                </button>
+                </ElButton>
               </td>
             </tr>
           </tbody>
@@ -287,21 +299,25 @@ onMounted(load);
           仅为已存在的项目成员授权；读取与写入、核实须明确配置。核实仍要求另一人和项目审核角色。
         </p>
         <label
-          >项目成员 *<select v-model="grant.user_id" required>
-            <option value="">选择成员</option>
-            <option v-for="u in catalog.users" :key="u.id" :value="u.id">
-              {{ u.display_name }}
-            </option>
-          </select></label
-        ><label class="inline-label"
-          ><input v-model="grant.can_read" type="checkbox" />金额读取</label
-        ><label class="inline-label"
-          ><input v-model="grant.can_write" type="checkbox" />财务录入</label
-        ><label class="inline-label"
-          ><input
-            v-model="grant.can_verify"
-            type="checkbox"
-          />独立财务核实</label
+          >项目成员 *<FormSelect
+            v-model="grant.user_id"
+            required
+            :aria-label="'项目成员 *'"
+          >
+            <ElOption data-ui-value="" value="" :label="'选择成员'" />
+            <ElOption
+              :data-ui-value="u.id"
+              v-for="u in catalog.users"
+              :key="u.id"
+              :value="u.id"
+              :label="String(u.display_name)"
+            /> </FormSelect></label
+        ><ElCheckbox class="inline-label" v-model="grant.can_read"
+          >金额读取</ElCheckbox
+        ><ElCheckbox class="inline-label" v-model="grant.can_write"
+          >财务录入</ElCheckbox
+        ><ElCheckbox class="inline-label" v-model="grant.can_verify"
+          >独立财务核实</ElCheckbox
         >
         <p class="muted">
           取消全部权限可撤销；已有含金额报告和导出也会停止访问。
@@ -309,53 +325,97 @@ onMounted(load);
       >
       <div v-else class="form-grid">
         <label
-          >财务记录编号 *<input
+          >财务记录编号 *<ElInput
             v-model="form.record_code"
             required
-            maxlength="64" /></label
+            maxlength="64"
+            :aria-label="'财务记录编号 *'" /></label
         ><label
-          >收付款方向 *<select v-model="form.direction">
-            <option :value="mode === 'plan' ? 'receivable' : 'receipt'">
-              {{ mode === "plan" ? "计划收款" : "实际收款" }}
-            </option>
-            <option :value="mode === 'plan' ? 'payable' : 'payment'">
-              {{ mode === "plan" ? "计划付款" : "实际付款" }}
-            </option>
-          </select></label
+          >收付款方向 *<FormSelect
+            v-model="form.direction"
+            :aria-label="'收付款方向 *'"
+          >
+            <ElOption
+              :data-ui-value="mode === 'plan' ? 'receivable' : 'receipt'"
+              :value="mode === 'plan' ? 'receivable' : 'receipt'"
+              :label="String(mode === 'plan' ? '计划收款' : '实际收款')"
+            />
+            <ElOption
+              :data-ui-value="mode === 'plan' ? 'payable' : 'payment'"
+              :value="mode === 'plan' ? 'payable' : 'payment'"
+              :label="String(mode === 'plan' ? '计划付款' : '实际付款')"
+            /> </FormSelect></label
         ><label
           >{{ mode === "plan" ? "计划日期 *" : "实际发生日期 *"
-          }}<input v-model="form.date" required type="date" /></label
+          }}<FormDate
+            v-model="form.date"
+            required
+            :aria-label="
+              String(mode === 'plan' ? '计划日期 *' : '实际发生日期 *')
+            " /></label
         ><label
           >{{ mode === "plan" ? "计划金额 *" : "实际金额 *"
-          }}<input
+          }}<ElInput
             v-model="form.amount"
             required
             type="text"
             inputmode="decimal"
-            pattern="[0-9]+(\.[0-9]{1,2})?" /></label
+            pattern="[0-9]+(\.[0-9]{1,2})?"
+            :aria-label="
+              String(mode === 'plan' ? '计划金额 *' : '实际金额 *')
+            " /></label
         ><label
-          >币种（三位大写） *<input
+          >币种（三位大写） *<ElInput
             v-model="form.currency"
             required
             pattern="[A-Z]{3}"
             maxlength="3"
-            placeholder="例如 CNY" /></label
+            placeholder="例如 CNY"
+            :aria-label="'币种（三位大写） *'" /></label
         ><label v-if="mode === 'actual'"
-          >关联财务计划<select v-model="form.financial_plan_id">
-            <option value="">不关联计划</option>
-            <option v-for="p in data?.plans" :key="p.id" :value="p.id">
-              {{ p.record_code }} · {{ p.currency }}
-            </option>
-          </select></label
+          >关联财务计划<FormSelect
+            v-model="form.financial_plan_id"
+            :aria-label="'关联财务计划'"
+          >
+            <ElOption data-ui-value="" value="" :label="'不关联计划'" />
+            <ElOption
+              :data-ui-value="p.id"
+              v-for="p in data?.plans"
+              :key="p.id"
+              :value="p.id"
+              :label="String(p.record_code) + ' · ' + String(p.currency)"
+            /> </FormSelect></label
         ><label v-else
-          >日期来源性质<select v-model="form.date_source_kind">
-            <option value="unconfirmed">待确认</option>
-            <option value="contractual">合同约定</option>
-            <option value="internal_plan">内部计划</option>
-          </select></label
+          >日期来源性质<FormSelect
+            v-model="form.date_source_kind"
+            :aria-label="'日期来源性质'"
+          >
+            <ElOption
+              data-ui-value="unconfirmed"
+              value="unconfirmed"
+              :label="'待确认'"
+            />
+            <ElOption
+              data-ui-value="contractual"
+              value="contractual"
+              :label="'合同约定'"
+            />
+            <ElOption
+              data-ui-value="internal_plan"
+              value="internal_plan"
+              :label="'内部计划'"
+            /> </FormSelect></label
         ><label class="full"
           >{{ mode === "plan" ? "计划依据 *" : "实际凭证来源 *"
-          }}<textarea v-model="form.source" required maxlength="500" />
+          }}<ElInput
+            v-model="form.source"
+            required
+            maxlength="500"
+            type="textarea"
+            :aria-label="
+              String(mode === 'plan' ? '计划依据 *' : '实际凭证来源 *')
+            "
+          />
         </label>
         <p class="notice warning full">
           计划日期与金额不会自动填入实际字段；录入实际事实后仍需另一名获授权人员核实。
@@ -364,10 +424,17 @@ onMounted(load);
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
     <template #footer
-      ><button :disabled="busy" @click="mode = ''">取消</button
-      ><button form="finance-form" class="primary" :disabled="busy">
+      ><ElButton :disabled="busy" @click="mode = ''" native-type="submit"
+        >取消</ElButton
+      ><ElButton
+        form="finance-form"
+        class="primary"
+        :disabled="busy"
+        native-type="submit"
+        type="primary"
+      >
         保存财务记录
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -381,20 +448,43 @@ onMounted(load);
     </p>
     <form id="finance-review" @submit.prevent="verify">
       <label
-        >核实结论<select v-model="decision">
-          <option value="verified">核实通过</option>
-          <option value="returned">退回补充</option>
-          <option value="disputed">存在争议</option>
-        </select></label
+        >核实结论<FormSelect v-model="decision" :aria-label="'核实结论'">
+          <ElOption
+            data-ui-value="verified"
+            value="verified"
+            :label="'核实通过'"
+          />
+          <ElOption
+            data-ui-value="returned"
+            value="returned"
+            :label="'退回补充'"
+          />
+          <ElOption
+            data-ui-value="disputed"
+            value="disputed"
+            :label="'存在争议'"
+          /> </FormSelect></label
       ><label
-        >财务核实依据 *<textarea v-model="comment" required maxlength="2000" />
+        >财务核实依据 *<ElInput
+          v-model="comment"
+          required
+          maxlength="2000"
+          type="textarea"
+          :aria-label="'财务核实依据 *'"
+        />
       </label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
     <template #footer
-      ><button form="finance-review" class="primary" :disabled="busy">
+      ><ElButton
+        form="finance-review"
+        class="primary"
+        :disabled="busy"
+        native-type="submit"
+        type="primary"
+      >
         确认财务核实
-      </button></template
+      </ElButton></template
     ></Modal
   >
 </template>

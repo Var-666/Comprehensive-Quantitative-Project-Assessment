@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { ElInput } from "element-plus/es/components/input/index";
+import FormSelect from "./FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import { ElButton } from "element-plus/es/components/button/index";
 import { reactive, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useCatalog } from "../store";
@@ -80,86 +84,106 @@ async function save() {
     <form id="template-form" @submit.prevent="save">
       <div class="form-grid">
         <label
-          >模板编号 *<input
+          >模板编号 *<ElInput
             v-model="form.template_code"
             required
             maxlength="64"
-            :readonly="!!template" /></label
+            :readonly="!!template"
+            :aria-label="'模板编号 *'" /></label
         ><label
-          >版本号 *<input
+          >版本号 *<ElInput
             v-model="form.version_label"
             required
             maxlength="30"
-            :readonly="!!template && !copy" /></label
+            :readonly="!!template && !copy"
+            :aria-label="'版本号 *'" /></label
         ><label
-          >模板名称 *<input
+          >模板名称 *<ElInput
             v-model="form.title"
             required
-            maxlength="200" /></label
+            maxlength="200"
+            :aria-label="'模板名称 *'" /></label
         ><label
-          >适用节点类型 *<select v-model="form.node_type_code" required>
-            <option value="">请选择</option>
-            <option
+          >适用节点类型 *<FormSelect
+            v-model="form.node_type_code"
+            required
+            :aria-label="'适用节点类型 *'"
+          >
+            <ElOption data-ui-value="" value="" :label="'请选择'" />
+            <ElOption
+              :data-ui-value="n.code"
               v-for="n in catalog.nodeTypes"
               :key="n.code"
               :value="n.code"
-            >
-              {{ n.display_name }}
-            </option>
-          </select></label
+              :label="String(n.display_name)"
+            /> </FormSelect></label
         ><label
-          >适用项目类型（留空表示不限）<input
+          >适用项目类型（留空表示不限）<ElInput
             v-model="form.project_type"
-            maxlength="60" /></label
+            maxlength="60"
+            :aria-label="'适用项目类型（留空表示不限）'" /></label
         ><label
-          >模板来源 *<input v-model="form.source_ref" required maxlength="500"
+          >模板来源 *<ElInput
+            v-model="form.source_ref"
+            required
+            maxlength="500"
+            :aria-label="'模板来源 *'"
         /></label>
       </div>
       <h3>节点触发后需执行的标准动作</h3>
       <section v-for="(item, i) in form.items" :key="i" class="form-section">
         <div class="form-grid">
           <label
-            >动作编号 *<input
+            >动作编号 *<ElInput
               v-model="item.item_code"
               required
-              maxlength="50" /></label
+              maxlength="50"
+              :aria-label="'动作编号 *'" /></label
           ><label
-            >动作名称 *<input
+            >动作名称 *<ElInput
               v-model="item.title"
               required
-              maxlength="240" /></label
+              maxlength="240"
+              :aria-label="'动作名称 *'" /></label
           ><label
-            >默认责任部门<select v-model="item.default_department_id">
-              <option :value="null">沿用节点部门</option>
-              <option
+            >默认责任部门<FormSelect
+              v-model="item.default_department_id"
+              :aria-label="'默认责任部门'"
+            >
+              <ElOption data-ui-value="" value="" :label="'沿用节点部门'" />
+              <ElOption
+                :data-ui-value="d.id"
                 v-for="d in catalog.departments"
                 :key="d.id"
                 :value="d.id"
-              >
-                {{ d.dept_name }}
-              </option>
-            </select></label
+                :label="String(d.dept_name)"
+              /> </FormSelect></label
           ><label
-            >完成判定及核实依据 *<textarea
+            >完成判定及核实依据 *<ElInput
               v-model="item.completion_criteria"
               required
               maxlength="4000"
-              rows="2"
-            /></label
+              :rows="2"
+              type="textarea"
+              :aria-label="'完成判定及核实依据 *'" /></label
           ><label
-            >所需材料（每行一项）<textarea v-model="item.materials" rows="2" />
+            >所需材料（每行一项）<ElInput
+              v-model="item.materials"
+              :rows="2"
+              type="textarea"
+              :aria-label="'所需材料（每行一项）'"
+            />
           </label>
         </div>
-        <button
-          type="button"
+        <ElButton
           :disabled="form.items.length === 1"
           @click="form.items.splice(i, 1)"
+          native-type="button"
         >
           移除此项
-        </button>
+        </ElButton>
       </section>
-      <button
-        type="button"
+      <ElButton
         :disabled="form.items.length >= 100"
         @click="
           form.items.push({
@@ -168,15 +192,17 @@ async function save() {
             materials: '',
           })
         "
+        native-type="button"
       >
         添加动作项
-      </button>
+      </ElButton>
     </form>
     <template #footer
-      ><button :disabled="busy" @click="emit('close')">取消</button
-      ><button form="template-form" type="submit" :disabled="busy">
+      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+        >取消</ElButton
+      ><ElButton form="template-form" :disabled="busy" native-type="submit">
         <Icon name="imgVectorSave" />保存草稿
-      </button></template
+      </ElButton></template
     >
   </Modal>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
 import type { Evidence, Metric } from "../evaluationTypes";
 import { categoryLabels } from "../evaluationTypes";
 import Modal from "./Modal.vue";
@@ -69,7 +70,9 @@ defineEmits<{ close: [] }>();
     ><template #footer
       ><RouterLink class="button" :to="`/projects/${metric.project_id}`"
         >查看当前项目记录</RouterLink
-      ><button @click="$emit('close')">关闭追溯</button></template
+      ><ElButton @click="$emit('close')" native-type="submit"
+        >关闭追溯</ElButton
+      ></template
     ></Modal
   >
 </template>

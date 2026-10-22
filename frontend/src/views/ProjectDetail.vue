@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, versionHeader } from "../api";
@@ -83,7 +84,7 @@ onMounted(load);
 </script>
 <template>
   <p v-if="error" class="error" role="alert">
-    {{ error }} <button @click="load">刷新</button>
+    {{ error }} <ElButton @click="load" native-type="submit">刷新</ElButton>
   </p>
   <p v-if="busy" role="status">加载中…</p>
   <template v-if="project"
@@ -97,16 +98,22 @@ onMounted(load);
       </div>
       <div class="actions">
         <RouterLink class="button" to="/projects">返回项目列表</RouterLink
-        ><button :disabled="!auth.can(project.id)" @click="editing = true">
-          编辑项目</button
-        ><button
+        ><ElButton
+          :disabled="!auth.can(project.id)"
+          @click="editing = true"
+          native-type="submit"
+        >
+          编辑项目</ElButton
+        ><ElButton
           class="primary"
           @click="
             router.push({ path: '/milestones', query: { project: project.id } })
           "
+          native-type="submit"
+          type="primary"
         >
           查看节点计划
-        </button>
+        </ElButton>
       </div>
     </div>
     <nav class="project-detail-tabs" aria-label="项目详情导航">
@@ -192,7 +199,12 @@ onMounted(load);
     </div>
     <p v-if="summaryError" class="error" role="alert">
       项目摘要暂不可用：{{ summaryError }}
-      <button :disabled="busy" @click="loadSummary(project)">重试摘要</button>
+      <ElButton
+        :disabled="busy"
+        @click="loadSummary(project)"
+        native-type="submit"
+        >重试摘要</ElButton
+      >
     </p>
     <div class="project-progress-panels">
       <section class="card project-milestones">
@@ -326,13 +338,15 @@ onMounted(load);
     </section>
     <ProjectMembers :project-id="project.id" />
     <p class="muted">
-      项目归档保留节点和审计历史。<button
+      项目归档保留节点和审计历史。<ElButton
         v-if="project.project_status !== 'archived' && auth.can(project.id)"
         class="text-button danger"
         @click="archiving = true"
+        native-type="submit"
+        link
       >
         归档项目
-      </button>
+      </ElButton>
     </p>
     <ProjectForm
       v-if="editing"
@@ -356,10 +370,20 @@ onMounted(load);
       </p>
       <p v-if="error" class="error">{{ error }}</p>
       <template #footer
-        ><button :disabled="busy" @click="archiving = false">取消</button
-        ><button class="primary" :disabled="busy" @click="archive">
+        ><ElButton
+          :disabled="busy"
+          @click="archiving = false"
+          native-type="submit"
+          >取消</ElButton
+        ><ElButton
+          class="primary"
+          :disabled="busy"
+          @click="archive"
+          native-type="submit"
+          type="primary"
+        >
           确认归档
-        </button></template
+        </ElButton></template
       ></Modal
     >
   </template>

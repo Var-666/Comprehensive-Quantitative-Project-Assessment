@@ -386,7 +386,9 @@ def register(app, Db, ok):
 
     @app.get("/api/v1/projects/{project_id}/reports")
     def report_list(request: Request, project_id: str, db: Db):
-        query = select(ReportDraft).where(ReportDraft.project_id == project_id)
+        query = select(ReportDraft).where(
+            ReportDraft.project_id == project_id, ReportDraft.deleted_at.is_(None)
+        )
         if not finance.allowed(db, request.state.principal, project_id):
             query = query.where(ReportDraft.contains_finance.is_(False))
         return ok(
@@ -400,11 +402,21 @@ def register(app, Db, ok):
     def report_scope(request, db, report_id, action="read", lock=False):
         obj = scoped(db, request.state.principal, ReportDraft, report_id, action, lock)
         reports.check_finance(db, request.state.principal, obj)
+        if obj.deleted_at is not None:
+            svc.fail(404, "NOT_FOUND", "报告不存在或已删除")
         return obj
 
     @app.get("/api/v1/reports/{report_id}")
     def report_detail(request: Request, report_id: str, db: Db):
         return ok(request, reports.detail(db, report_scope(request, db, report_id)))
+
+    @app.delete("/api/v1/reports/{report_id}")
+    def delete_report(request: Request, report_id: str, db: Db, if_match: str = Header()):
+        obj = report_scope(request, db, report_id, "write", True)
+        svc.match(obj, if_match)
+        reports.remove(db, obj, request.state.request_id)
+        db.commit()
+        return ok(request, {"id": obj.id})
 
     @app.post("/api/v1/reports/{report_id}/submit-review")
     def submit_report(request: Request, report_id: str, db: Db, if_match: str = Header()):

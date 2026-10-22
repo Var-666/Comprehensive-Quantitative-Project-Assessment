@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
+import FormSelect from "./FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import { ElInput } from "element-plus/es/components/input/index";
+import { ElCheckbox } from "element-plus/es/components/checkbox/index";
 import { computed, onMounted, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useAuth, useCatalog } from "../store";
@@ -110,19 +115,30 @@ onMounted(async () => {
   >
     <template #navigation>
       <div class="drawer-tabs">
-        <button
+        <ElButton
           :class="{ primary: tab === 'details' }"
           @click="tab = 'details'"
+          native-type="submit"
+          :type="tab === 'details' ? 'primary' : 'default'"
         >
-          任务详情</button
-        ><button
+          任务详情</ElButton
+        ><ElButton
           :class="{ primary: tab === 'feedback' }"
           @click="tab = 'feedback'"
+          native-type="submit"
+          :type="
+            { primary: tab === 'feedback' }.primary ? 'primary' : 'default'
+          "
         >
-          执行反馈</button
-        ><button :class="{ primary: tab === 'audit' }" @click="tab = 'audit'">
+          执行反馈</ElButton
+        ><ElButton
+          :class="{ primary: tab === 'audit' }"
+          @click="tab = 'audit'"
+          native-type="submit"
+          :type="tab === 'audit' ? 'primary' : 'default'"
+        >
           操作记录
-        </button>
+        </ElButton>
       </div>
     </template>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -163,31 +179,52 @@ onMounted(async () => {
         @submit.prevent="update()"
       >
         <label
-          >分派执行人 *<select v-model="assignee" required>
-            <option value="">请选择具有项目编辑权限的账号</option>
-            <option v-for="u in catalog.users" :key="u.id" :value="u.id">
-              {{ u.display_name }}
-            </option>
-          </select></label
-        >
+          >分派执行人 *<FormSelect
+            v-model="assignee"
+            required
+            :aria-label="'分派执行人 *'"
+          >
+            <ElOption
+              data-ui-value=""
+              value=""
+              :label="'请选择具有项目编辑权限的账号'"
+            />
+            <ElOption
+              :data-ui-value="u.id"
+              v-for="u in catalog.users"
+              :key="u.id"
+              :value="u.id"
+              :label="String(u.display_name)"
+            /> </FormSelect
+        ></label>
         <p class="muted">
           后端验证项目编辑权限及可用账号，只读角色不能执行任务。
         </p>
-        <button :disabled="busy || detail.requires_review" class="primary">
-          保存任务分派</button
-        ><button type="button" :disabled="busy" @click="update('cancelled')">
+        <ElButton
+          :disabled="busy || detail.requires_review"
+          class="primary"
+          native-type="submit"
+          type="primary"
+        >
+          保存任务分派</ElButton
+        ><ElButton
+          :disabled="busy"
+          @click="update('cancelled')"
+          native-type="button"
+        >
           取消旧任务
-        </button>
+        </ElButton>
       </form>
-      <button
+      <ElButton
         v-if="executor && ['todo', 'returned'].includes(detail.status)"
         :disabled="busy || detail.requires_review"
         @click="update('in_progress')"
+        native-type="submit"
       >
         开始处理
-      </button></template
+      </ElButton></template
     >
-    <button
+    <ElButton
       v-if="
         detail.requires_review &&
         detail.status === 'submitted' &&
@@ -195,9 +232,10 @@ onMounted(async () => {
       "
       :disabled="busy"
       @click="update('cancelled')"
+      native-type="submit"
     >
       取消需复核的旧任务
-    </button>
+    </ElButton>
     <template v-if="tab === 'feedback'"
       ><form
         v-if="
@@ -209,29 +247,34 @@ onMounted(async () => {
         @submit.prevent="feedback"
       >
         <label
-          >处理情况与执行结果 *<textarea
+          >处理情况与执行结果 *<ElInput
             v-model="comment"
-            rows="5"
+            :rows="5"
             required
             maxlength="4000"
-          /></label
+            type="textarea"
+            :aria-label="'处理情况与执行结果 *'" /></label
         ><label
-          >来源 / 证据说明 *<textarea
+          >来源 / 证据说明 *<ElInput
             v-model="evidence"
             required
             maxlength="500"
-            rows="2"
-          /></label
-        ><label class="checkbox-line"
-          ><input
-            v-model="claimed"
-            type="checkbox"
-          />声称此项准备动作已完成（仍需独立核实）</label
+            :rows="2"
+            type="textarea"
+            :aria-label="'来源 / 证据说明 *'" /></label
+        ><ElCheckbox class="checkbox-line" v-model="claimed"
+          >声称此项准备动作已完成（仍需独立核实）</ElCheckbox
         >
         <p class="notice">
           提交反馈 ≠ 确认节点完成。当前只保存证据引用，不冒充已上传正式附件。
         </p>
-        <button class="primary" :disabled="busy">提交执行反馈</button>
+        <ElButton
+          class="primary"
+          :disabled="busy"
+          native-type="submit"
+          type="primary"
+          >提交执行反馈</ElButton
+        >
       </form>
       <p v-if="!detail.feedback.length" class="empty">尚无执行反馈。</p>
       <section v-for="f in detail.feedback" :key="f.id" class="form-section">
@@ -257,20 +300,36 @@ onMounted(async () => {
             !detail.requires_review
           "
           ><label
-            >核实意见 *<textarea v-model="review" required maxlength="500" />
+            >核实意见 *<ElInput
+              v-model="review"
+              required
+              maxlength="500"
+              type="textarea"
+              :aria-label="'核实意见 *'"
+            />
           </label>
           <div class="actions">
-            <button
+            <ElButton
               class="primary"
               :disabled="busy"
               @click="verify(f.id, 'accepted')"
+              native-type="submit"
+              type="primary"
             >
-              核实接受</button
-            ><button :disabled="busy" @click="verify(f.id, 'returned')">
-              退回反馈</button
-            ><button :disabled="busy" @click="verify(f.id, 'disputed')">
+              核实接受</ElButton
+            ><ElButton
+              :disabled="busy"
+              @click="verify(f.id, 'returned')"
+              native-type="submit"
+            >
+              退回反馈</ElButton
+            ><ElButton
+              :disabled="busy"
+              @click="verify(f.id, 'disputed')"
+              native-type="submit"
+            >
               标记异议
-            </button>
+            </ElButton>
           </div></template
         >
       </section></template
@@ -288,7 +347,9 @@ onMounted(async () => {
       <p v-if="!audit.length" class="empty">尚无操作记录。</p></template
     >
     <template #footer
-      ><button :disabled="busy" @click="emit('close')">关闭</button></template
+      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+        >关闭</ElButton
+      ></template
     >
   </Modal>
 </template>

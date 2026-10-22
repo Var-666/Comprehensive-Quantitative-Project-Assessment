@@ -120,6 +120,7 @@ class ReportDraft(Identity, Base):
     reviewer_id: Mapped[str | None] = mapped_column(String(80))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     row_version: Mapped[int] = mapped_column(Integer, default=1)
     __mapper_args__ = {"version_id_col": row_version}
 

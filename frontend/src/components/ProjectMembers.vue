@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import FormSelect from "./FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import { ElButton } from "element-plus/es/components/button/index";
 import { onMounted, ref } from "vue";
 import { api, errorMessage, json } from "../api";
 import { useAuth, useCatalog } from "../store";
@@ -65,19 +68,31 @@ onMounted(load);
       @submit.prevent="save()"
     >
       <label
-        >授权人员<select v-model="userId" required aria-label="授权人员">
-          <option value="" disabled>请选择</option>
-          <option v-for="u in catalog.users" :key="u.id" :value="u.id">
-            {{ u.display_name }}
-          </option>
-        </select></label
+        >授权人员<FormSelect v-model="userId" required aria-label="授权人员">
+          <ElOption data-ui-value="" value="" disabled :label="'请选择'" />
+          <ElOption
+            :data-ui-value="u.id"
+            v-for="u in catalog.users"
+            :key="u.id"
+            :value="u.id"
+            :label="String(u.display_name)"
+          /> </FormSelect></label
       ><label
-        >项目角色<select v-model="role" aria-label="项目角色">
-          <option v-for="(label, key) in labels" :key="key" :value="key">
-            {{ label }}
-          </option>
-        </select></label
-      ><button class="primary" :disabled="busy">授权成员</button>
+        >项目角色<FormSelect v-model="role" aria-label="项目角色">
+          <ElOption
+            :data-ui-value="key"
+            v-for="(label, key) in labels"
+            :key="key"
+            :value="key"
+            :label="String(label)"
+          /> </FormSelect></label
+      ><ElButton
+        class="primary"
+        :disabled="busy"
+        native-type="submit"
+        type="primary"
+        >授权成员</ElButton
+      >
     </form>
     <div class="table-wrap">
       <table>
@@ -95,14 +110,15 @@ onMounted(load);
             <td>{{ labels[m.role_code] }}</td>
             <td>{{ m.active ? "有效" : "已撤销" }}</td>
             <td>
-              <button
+              <ElButton
                 v-if="
                   auth.user?.is_system_admin || auth.can(projectId, 'manage')
                 "
                 :disabled="busy"
                 @click="save(m.user_id, m.role_code, !m.active)"
+                native-type="submit"
               >
-                {{ m.active ? "撤销授权" : "恢复授权" }}</button
+                {{ m.active ? "撤销授权" : "恢复授权" }}</ElButton
               ><span v-else>只读</span>
             </td>
           </tr>

@@ -11,11 +11,11 @@ from sqlalchemy import select
 
 from app import ai_service, llm_provider
 from app.config import settings
-from app.evaluation_models import FinancialActual
-from app.models import ActualRecord, Milestone, PlanVersion, Project, ProjectMember
+from app.evaluation_models import FinancialActual, MetricSnapshot, ReportDraft, ReportReview
+from app.models import ActualRecord, AuditEvent, Milestone, PlanVersion, Project, ProjectMember
 from app.phase3_seed import load_finance
 from app.seed import load_sample
-from conftest import REVIEWER_ID, as_reviewer, login_as
+from conftest import REVIEWER_ID, VIEWER_ID, as_reviewer, login_as
 from test_phase1 import create, node_payload
 
 ADMIN = "00000000-0000-0000-0000-000000000002"
@@ -173,6 +173,14 @@ def test_finance_requires_extra_grant_and_never_copies_plan_to_actual(client, fa
     grant(client, p, can_read=False)
     assert client.get(f"/api/v1/reports/{report['id']}").status_code == 403
     assert client.get(f"/api/v1/reports/{report['id']}/export").status_code == 403
+    assert (
+        client.delete(
+            f"/api/v1/reports/{report['id']}", headers={"If-Match": str(report["row_version"])}
+        ).status_code
+        == 403
+    )
+    with factory() as db:
+        assert db.get(ReportDraft, report["id"]).deleted_at is None
     assert client.get(f"/api/v1/projects/{p}/reports").json()["data"] == []
 
 
@@ -271,6 +279,88 @@ def test_report_idempotency_independent_approval_and_escaped_export(client, fact
     assert exported.headers["content-security-policy"] == "default-src 'none'; sandbox"
     login_as(client, "viewer")
     assert client.get(path).status_code == 404
+
+
+@pytest.mark.parametrize("approved", [False, True])
+def test_report_delete_hides_access_preserves_audit_and_guards_versions(client, factory, approved):
+    sample(factory)
+    p = client.get("/api/v1/projects").json()["data"]["items"][0]["id"]
+    snap = snapshot(client, p)
+    args = {
+        "headers": {"Idempotency-Key": "delete-report"},
+        "json": {"metric_snapshot_id": snap["id"]},
+    }
+    report = client.post(f"/api/v1/projects/{p}/reports/draft", **args).json()["data"]
+    path = f"/api/v1/reports/{report['id']}"
+    if approved:
+        submitted = client.post(
+            path + "/submit-review", headers={"If-Match": str(report["row_version"])}
+        ).json()["data"]
+        with as_reviewer(client):
+            report = client.post(
+                path + "/review",
+                headers={"If-Match": str(submitted["row_version"])},
+                json={"decision": "approved", "comment": "核对冻结事实"},
+            ).json()["data"]
+    with factory.begin() as db:
+        db.add(ProjectMember(project_id=p, user_id=VIEWER_ID, role_code="viewer"))
+    login_as(client, "viewer")
+    assert client.get(path).status_code == 200
+    assert client.delete(path, headers={"If-Match": str(report["row_version"])}).status_code == 403
+    login_as(client)
+    assert client.delete(path).status_code == 422
+    assert client.delete(path, headers={"If-Match": "0"}).status_code == 409
+    assert client.get(path).status_code == 200
+    deleted = client.delete(path, headers={"If-Match": str(report["row_version"])})
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["data"] == {"id": report["id"]}
+    assert client.get(f"/api/v1/projects/{p}/reports").json()["data"] == []
+    for suffix in ("", "/export"):
+        assert client.get(path + suffix).status_code == 404
+    assert client.delete(path, headers={"If-Match": str(report["row_version"])}).status_code == 404
+    assert (
+        client.post(
+            path + "/submit-review", headers={"If-Match": str(report["row_version"])}
+        ).status_code
+        == 404
+    )
+    with as_reviewer(client):
+        assert (
+            client.post(
+                path + "/review",
+                headers={"If-Match": str(report["row_version"])},
+                json={"decision": "approved", "comment": "不得审核已删除报告"},
+            ).status_code
+            == 404
+        )
+    replay = client.post(f"/api/v1/projects/{p}/reports/draft", **args)
+    assert replay.status_code == 409 and replay.json()["error"]["code"] == "REPORT_DELETED"
+    with factory() as db:
+        stored = db.get(ReportDraft, report["id"])
+        assert stored.deleted_at is not None and stored.row_version == report["row_version"] + 1
+        assert (
+            stored.content == report["content"]
+            and stored.fact_bundle_json == report["fact_bundle_json"]
+        )
+        assert stored.review_status == report["review_status"]
+        assert db.get(MetricSnapshot, snap["id"]) is not None
+        assert len(
+            list(db.scalars(select(ReportReview).where(ReportReview.report_id == report["id"])))
+        ) == int(approved)
+        audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.aggregate_id == report["id"], AuditEvent.action == "delete_report"
+            )
+        )
+        assert audit.actor_id == ADMIN and audit.request_id
+        assert audit.before_json["deleted_at"] is None and audit.after_json["deleted_at"]
+    # A fresh generation request creates a new report without reviving the deleted one.
+    fresh = client.post(
+        f"/api/v1/projects/{p}/reports/draft",
+        headers={"Idempotency-Key": "fresh-report"},
+        json=args["json"],
+    )
+    assert fresh.status_code == 201 and fresh.json()["data"]["id"] != report["id"]
 
 
 def test_mock_never_uses_network_and_real_requires_explicit_authorization(monkeypatch):

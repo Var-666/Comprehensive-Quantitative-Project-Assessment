@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import PageNavigation from "../components/PageNavigation.vue";
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElInput } from "element-plus/es/components/input/index";
+import FormSelect from "../components/FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, errorMessage } from "../api";
@@ -73,32 +78,42 @@ onMounted(() => load());
       <p>集中管理试点项目基本信息、当前状态与节点执行数据</p>
     </div>
     <div class="actions">
-      <button
+      <ElButton
         :disabled="!auth.user?.is_system_admin"
         @click="showImport = true"
+        native-type="submit"
       >
-        <Icon name="imgVectorFileUp" />导入 Excel</button
-      ><button
+        <Icon name="imgVectorFileUp" />导入 Excel</ElButton
+      ><ElButton
         class="primary"
         :disabled="!auth.user?.is_system_admin"
         @click="edit()"
+        native-type="submit"
+        type="primary"
       >
         <Icon name="imgVectorPlus" />新建项目
-      </button>
+      </ElButton>
     </div>
   </div>
   <form class="card filters" @submit.prevent="load()">
-    <div class="search">
-      <Icon name="imgVectorSearch" /><input
-        v-model="keyword"
-        aria-label="搜索项目"
-        placeholder="搜索项目编号 / 项目名称 / 负责人"
-      />
-    </div>
+    <ElInput
+      v-model="keyword"
+      class="project-search"
+      aria-label="搜索项目"
+      placeholder="搜索项目编号 / 项目名称 / 负责人"
+      clearable
+    >
+      <template #prefix><Icon name="imgVectorSearch" /></template>
+    </ElInput>
     <label class="inline-label"
-      >项目状态<select v-model="status" @change="load()">
-        <option value="">全部</option>
-        <option
+      >项目状态<FormSelect
+        v-model="status"
+        @change="load()"
+        :aria-label="'项目状态'"
+      >
+        <ElOption data-ui-value="" value="" :label="'全部'" />
+        <ElOption
+          :data-ui-value="s"
           v-for="s in [
             'draft',
             'not_started',
@@ -108,26 +123,28 @@ onMounted(() => load());
           ]"
           :key="s"
           :value="s"
-        >
-          {{ statuses[s] }}
-        </option>
-      </select></label
+          :label="String(statuses[s])"
+        /> </FormSelect></label
     ><label class="inline-label"
-      >项目类型<input
+      >项目类型<FormSelect
         v-model="type"
         aria-label="项目类型"
-        placeholder="全部"
-        list="filter-types"
+        allow-create
+        default-first-option
         @change="load()"
-      /><datalist id="filter-types">
-        <option>船舶建造</option>
-        <option>试制项目</option>
-        <option>修理改造</option>
-      </datalist></label
-    ><button type="submit" :disabled="busy">查询</button
-    ><button type="button" @click="reset">
+      >
+        <ElOption data-ui-value="" value="" label="全部" />
+        <ElOption
+          v-for="item in ['船舶建造', '试制项目', '修理改造']"
+          :key="item"
+          :data-ui-value="item"
+          :value="item"
+          :label="item"
+        /> </FormSelect></label
+    ><ElButton :disabled="busy" native-type="submit">查询</ElButton
+    ><ElButton @click="reset" native-type="button">
       <Icon name="imgVectorRotateCcw" />重置筛选
-    </button>
+    </ElButton>
   </form>
   <div class="stat-grid">
     <div
@@ -146,7 +163,8 @@ onMounted(() => load());
   </div>
   <p v-if="success" class="success" role="status">{{ success }}</p>
   <p v-if="error" class="error" role="alert">
-    {{ error }} <button @click="load(data.page)">重试</button>
+    {{ error }}
+    <ElButton @click="load(data.page)" native-type="submit">重试</ElButton>
   </p>
   <section class="card table-card" :aria-busy="busy">
     <div class="section-title">
@@ -155,7 +173,7 @@ onMounted(() => load());
     </div>
     <p v-if="busy" class="empty" role="status">正在加载项目…</p>
     <div v-else-if="data.items.length" class="table-wrap">
-      <table>
+      <table class="project-list-table">
         <thead>
           <tr>
             <th>项目编号</th>
@@ -165,6 +183,7 @@ onMounted(() => load());
             <th>节点数量</th>
             <th>最近更新</th>
             <th>状态</th>
+            <th>备注</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -175,31 +194,33 @@ onMounted(() => load());
                 p.project_code
               }}</RouterLink>
             </td>
-            <td>
-              {{ p.project_name
-              }}<small v-if="p.attention_note" class="subline warning-text">{{
-                p.attention_note
-              }}</small>
-            </td>
+            <td>{{ p.project_name }}</td>
             <td>{{ p.project_type || "—" }}</td>
             <td>{{ p.owner_name || "未指定" }}</td>
             <td>{{ p.milestone_count }}</td>
             <td>{{ p.updated_at.slice(0, 10) }}</td>
             <td><StatusBadge :value="p.project_status" /></td>
-            <td class="row-actions">
-              <RouterLink
-                class="icon-button"
-                :to="`/projects/${p.id}`"
-                :aria-label="`查看 ${p.project_code}`"
-                ><Icon name="imgVectorEye" /></RouterLink
-              ><button
-                class="icon-button"
-                :aria-label="`编辑 ${p.project_code}`"
-                :disabled="!auth.can(p.id)"
-                @click="edit(p)"
-              >
-                <Icon name="imgVectorPencil" />
-              </button>
+            <td :class="{ 'warning-text': p.attention_note }">
+              {{ p.attention_note || "—" }}
+            </td>
+            <td>
+              <div class="row-actions">
+                <RouterLink
+                  class="icon-button"
+                  :to="`/projects/${p.id}`"
+                  :aria-label="`查看 ${p.project_code}`"
+                  ><Icon name="imgVectorEye" /></RouterLink
+                ><ElButton
+                  class="icon-button"
+                  :aria-label="`编辑 ${p.project_code}`"
+                  :disabled="!auth.can(p.id)"
+                  @click="edit(p)"
+                  native-type="submit"
+                  link
+                >
+                  <Icon name="imgVectorPencil" />
+                </ElButton>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -208,17 +229,13 @@ onMounted(() => load());
     <div v-else-if="!error" class="empty">
       暂无符合条件的项目。可新建项目或导入 Excel。
     </div>
-    <div class="pagination">
-      <span>第 {{ data.page }} 页 · 共 {{ data.total }} 条</span
-      ><button :disabled="busy || data.page <= 1" @click="load(data.page - 1)">
-        上一页</button
-      ><button
-        :disabled="busy || data.page * data.page_size >= data.total"
-        @click="load(data.page + 1)"
-      >
-        下一页
-      </button>
-    </div>
+    <PageNavigation
+      :page="data.page"
+      :total="data.total"
+      :page-size="data.page_size"
+      :disabled="busy"
+      @change="load"
+    />
   </section>
   <ProjectForm
     v-if="showForm"

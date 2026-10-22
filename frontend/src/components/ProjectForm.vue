@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { ElInput } from "element-plus/es/components/input/index";
+import FormSelect from "./FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import FormDate from "./FormDate.vue";
+import { ElButton } from "element-plus/es/components/button/index";
 import { onMounted, reactive, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useCatalog, useAuth } from "../store";
@@ -72,22 +77,25 @@ async function save() {
         <h3>项目基本信息</h3>
         <div class="form-grid">
           <label
-            >项目编号 *<input
+            >项目编号 *<ElInput
               v-model="form.project_code"
               required
               maxlength="64"
+              :aria-label="'项目编号 *'"
           /></label>
           <label
-            >项目名称 *<input
+            >项目名称 *<ElInput
               v-model="form.project_name"
               required
               maxlength="200"
+              :aria-label="'项目名称 *'"
           /></label>
           <label
-            >项目类型<input
+            >项目类型<ElInput
               v-model="form.project_type"
               list="project-types"
               maxlength="60"
+              :aria-label="'项目类型'"
             /><datalist id="project-types">
               <option>船舶建造</option>
               <option>试制项目</option>
@@ -95,8 +103,12 @@ async function save() {
             </datalist></label
           >
           <label
-            >项目状态<select v-model="form.project_status">
-              <option
+            >项目状态<FormSelect
+              v-model="form.project_status"
+              :aria-label="'项目状态'"
+            >
+              <ElOption
+                :data-ui-value="s"
                 v-for="s in [
                   'draft',
                   'not_started',
@@ -106,52 +118,60 @@ async function save() {
                 ]"
                 :key="s"
                 :value="s"
-              >
-                {{ statuses[s] }}
-              </option>
-            </select></label
-          >
+                :label="String(statuses[s])"
+              /> </FormSelect
+          ></label>
           <label
-            >项目负责人<select v-model="form.owner_id">
-              <option value="">未指定</option>
-              <option v-for="u in catalog.users" :key="u.id" :value="u.id">
-                {{ u.display_name }}
-              </option>
-            </select></label
-          >
+            >项目负责人<FormSelect
+              v-model="form.owner_id"
+              :aria-label="'项目负责人'"
+            >
+              <ElOption data-ui-value="" value="" :label="'未指定'" />
+              <ElOption
+                :data-ui-value="u.id"
+                v-for="u in catalog.users"
+                :key="u.id"
+                :value="u.id"
+                :label="String(u.display_name)"
+              /> </FormSelect
+          ></label>
           <label
-            >责任部门<select v-model="form.department_id">
-              <option value="">未指定</option>
-              <option
+            >责任部门<FormSelect
+              v-model="form.department_id"
+              :aria-label="'责任部门'"
+            >
+              <ElOption data-ui-value="" value="" :label="'未指定'" />
+              <ElOption
+                :data-ui-value="d.id"
                 v-for="d in catalog.departments"
                 :key="d.id"
                 :value="d.id"
-              >
-                {{ d.dept_name }}
-              </option>
-            </select></label
-          >
+                :label="String(d.dept_name)"
+              /> </FormSelect
+          ></label>
         </div>
       </section>
       <section class="form-section">
         <h3>计划时间与备注</h3>
         <div class="form-grid">
           <label
-            >计划开始日期<input
+            >计划开始日期<FormDate
               v-model="form.planned_start"
-              type="date" /></label
+              :aria-label="'计划开始日期'" /></label
           ><label
-            >预计结束日期<input
+            >预计结束日期<FormDate
               v-model="form.planned_end"
-              type="date"
               :min="form.planned_start"
+              :aria-label="'预计结束日期'"
           /></label>
         </div>
         <label
-          >关注说明<textarea
+          >关注说明<ElInput
             v-model="form.attention_note"
             maxlength="2000"
-            rows="2"
+            :rows="2"
+            type="textarea"
+            :aria-label="'关注说明'"
           />
         </label>
       </section>
@@ -160,15 +180,17 @@ async function save() {
       </p>
     </form>
     <template #footer
-      ><button :disabled="busy" @click="emit('close')">取消</button
-      ><button
+      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+        >取消</ElButton
+      ><ElButton
         class="primary"
-        type="submit"
         form="project-form"
         :disabled="busy"
+        native-type="submit"
+        type="primary"
       >
         {{ busy ? "保存中…" : "保存并进入详情" }}
-      </button></template
+      </ElButton></template
     >
   </Modal>
 </template>

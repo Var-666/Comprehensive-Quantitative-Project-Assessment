@@ -1,3 +1,4 @@
+import { choose, setChecked } from '../tests/ui-controls.mjs';
 import {test,expect} from '@playwright/test';
 import crypto from 'node:crypto';
 import path from 'node:path';
@@ -18,20 +19,32 @@ test('HTTPS settings persist credentials and independent discovered/model-tested
  const settingsResponse=await page.request.get('/api/v1/settings/llm');expect(await settingsResponse.text()).not.toContain(key);
  await page.getByRole('button',{name:'测试连接',exact:true}).click();d=page.getByRole('dialog');await expect(d).toContainText('列表读取成功');await expect(d).toContainText('尚未执行');await d.getByRole('button',{name:'关闭结果',exact:true}).click();
  await page.getByRole('button',{name:'刷新模型列表',exact:true}).click();await expect(page.getByRole('status')).toContainText('自动验证完成：已测试 3/3 个，2 个通过，1 个未通过');
- let row=page.getByRole('row').filter({hasText:'http-double-analysis'});await expect(row).toContainText('基础调用通过');
- await expect(page.getByRole('row').filter({hasText:'http-double-blocked'})).toContainText('当前账号无权限');
- await expect(page.getByRole('row').filter({hasText:'http-double-notice'})).toContainText('基础调用通过');expect(automaticTests).toHaveLength(3);
+ let row=page.locator('.llm-model-tile[data-model-id="http-double-analysis"]');await expect(row).toContainText('基础调用通过');
+ await expect(page.locator('.llm-model-tile')).toHaveCount(2);
+ await expect(page.locator('.llm-model-tile[data-model-id="http-double-blocked"]')).toHaveCount(0);
+ await expect(page.locator('.llm-model-tile[data-model-id="http-double-notice"]')).toContainText('基础调用通过');expect(automaticTests).toHaveLength(3);
+ const discovered=(await (await page.request.get('/api/v1/settings/llm/models')).json()).data;expect(discovered).toHaveLength(3);expect(discovered.find(m=>m.model_id==='http-double-blocked').selectable).toBe(false);
+ const notice=page.locator('.llm-model-tile[data-model-id="http-double-notice"]');await notice.getByRole('button',{name:'禁用',exact:true}).click();await expect(notice).toContainText('已禁用');await expect(page.locator('.llm-model-tile')).toHaveCount(2);await notice.getByRole('button',{name:'启用',exact:true}).click();await expect(notice.getByRole('button',{name:'禁用',exact:true})).toBeVisible();
+ for(const collapsed of [false,true]){
+  if(collapsed)await page.getByRole('button',{name:'收起侧边栏',exact:true}).click();
+  for(const width of [1440,1275,1024]){
+   await page.setViewportSize({width,height:984});
+   const layout=await page.locator('.llm-model-grid').evaluate(grid=>{const bounds=grid.getBoundingClientRect();return [...grid.children].map(tile=>{const box=tile.getBoundingClientRect();return {inside:box.left>=bounds.left&&box.right<=bounds.right&&box.bottom<=bounds.bottom,compact:box.height<=230,overflow:tile.scrollWidth>tile.clientWidth};});});expect(layout.every(t=>t.inside&&t.compact&&!t.overflow)).toBe(true);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+   if(width===1275){await page.locator('.llm-model-card').scrollIntoViewIfNeeded();await page.screenshot({path:`test-results-llm/model-cards-${collapsed?'collapsed':'expanded'}-1275.png`,animations:'disabled'});}
+  }
+ }
+ await page.getByRole('button',{name:'展开侧边栏',exact:true}).click();
  await page.getByRole('button',{name:'刷新模型列表',exact:true}).click();await expect(page.getByRole('status')).toContainText('跳过 2 个已验证或已禁用模型');expect(automaticTests).toHaveLength(4);
  await page.getByRole('button',{name:/先连接服务并获取模型列表/}).click();await page.locator('#default-model-options').getByRole('button',{name:/HTTP替身：分析测试模型/}).click();
- await page.getByRole('combobox',{name:'通知与工作安排草稿',exact:true}).selectOption({label:'HTTP替身：通知测试模型'});
+ await choose(page.getByRole('combobox',{name:'通知与工作安排草稿',exact:true}), {label:'HTTP替身：通知测试模型'});
  await page.getByRole('switch',{name:'启用实际模型调用'}).click();await expect(page.getByRole('switch')).toHaveAttribute('aria-checked','true');
- await page.reload();await expect(page.getByRole('switch')).toHaveAttribute('aria-checked','true');await expect(page.getByRole('combobox',{name:'通知与工作安排草稿',exact:true})).not.toHaveValue('');
- await page.getByRole('row').filter({hasText:'http-double-analysis'}).getByRole('button',{name:'禁用',exact:true}).click();await expect(page.getByRole('alert')).toContainText('模型正被默认或业务场景引用');
+ await page.reload();await expect(page.getByRole('switch')).toHaveAttribute('aria-checked','true');await expect(page.locator('.el-select').filter({has:page.getByRole('combobox',{name:'通知与工作安排草稿',exact:true})})).toContainText('HTTP替身：通知测试模型');
+ await page.locator('.llm-model-tile[data-model-id="http-double-analysis"]').getByRole('button',{name:'禁用',exact:true}).click();await expect(page.getByRole('alert')).toContainText('模型正被默认或业务场景引用');
  await page.getByRole('button',{name:'＋ 手动添加模型',exact:true}).click();d=page.getByRole('dialog');await page.screenshot({path:'test-results-llm/llm-manual-dialog.png'});await d.getByLabel('模型 ID *').fill('manual-http-double-id');await d.getByLabel('显示名称（可选）').fill('手动HTTP替身模型');await d.getByRole('button',{name:'保存模型',exact:true}).click();await expect(d).toHaveCount(0);
- row=page.getByRole('row').filter({hasText:'manual-http-double-id'});await expect(row).toContainText('手动录入');await expect(row).toContainText('尚未测试');await row.getByRole('button',{name:'删除',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'确认删除模型'}).click();await expect(row).toHaveCount(0);
+ row=page.locator('.llm-model-tile[data-model-id="manual-http-double-id"]');await expect(row).toHaveCount(0);await expect(page.getByRole('status')).toContainText('点击刷新模型自动验证');await page.getByRole('button',{name:'刷新模型',exact:true}).click();await expect(row).toContainText('手动录入');await expect(row).toContainText('基础调用通过');await row.getByRole('button',{name:'删除',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'确认删除模型'}).click();await expect(row).toHaveCount(0);
  await page.screenshot({path:'test-results-llm/llm-settings-configured.png',fullPage:true});
- await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();d=page.getByRole('dialog');await expect(d.getByLabel('新的 API Key *')).toHaveValue('');await d.getByLabel('新的 API Key *').fill(key+'-replacement');await d.getByRole('button',{name:'保存新密钥',exact:true}).click();await expect(d).toHaveCount(0);await expect(page.getByRole('row').filter({hasText:'http-double-analysis'})).toContainText('尚未测试');
- await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'移除已保存 Key'}).click();d=page.getByRole('dialog');await d.getByRole('checkbox').check();await d.getByRole('button',{name:'确认移除密钥'}).click();await expect(d).toHaveCount(0);await expect(page.getByRole('switch')).toHaveAttribute('aria-checked','false');
+ await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();d=page.getByRole('dialog');await expect(d.getByLabel('新的 API Key *')).toHaveValue('');await d.getByLabel('新的 API Key *').fill(key+'-replacement');await d.getByRole('button',{name:'保存新密钥',exact:true}).click();await expect(d).toHaveCount(0);await expect(page.locator('.llm-model-tile')).toHaveCount(0);await expect(page.getByText('暂无测试通过的模型',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'移除已保存 Key'}).click();d=page.getByRole('dialog');await setChecked(d.getByRole('checkbox'), true);await d.getByRole('button',{name:'确认移除密钥'}).click();await expect(d).toHaveCount(0);await expect(page.getByRole('switch')).toHaveAttribute('aria-checked','false');
  for(const storage of ['localStorage','sessionStorage'])expect(await page.evaluate(name=>JSON.stringify(window[name]),storage)).not.toContain(key);
  for(const path of ['/api/v1/settings/llm','/api/v1/settings/llm/models','/api/v1/settings/llm/audit-events','/api/v1/settings/llm/call-logs'])expect(await (await page.request.get(path)).text()).not.toContain(key);
  for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:1000});const geometry=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,width:innerWidth,height:innerHeight,sidebar:document.querySelector('.sidebar').getBoundingClientRect().height,broken:[...document.images].filter(i=>!i.complete||i.naturalWidth===0).length,settingsIcon:document.querySelector('.sidebar a[href="/settings/llm"] img').getBoundingClientRect().width,toggle:document.querySelector('.llm-toggle img').getBoundingClientRect().width}));expect(geometry.scroll).toBeLessThanOrEqual(width);expect(geometry.sidebar).toBe(geometry.height);expect(geometry.broken).toBe(0);expect(geometry.settingsIcon).toBe(20);expect(geometry.toggle).toBe(65);}
@@ -59,9 +72,9 @@ test('non administrator cannot see navigation or access settings APIs',async({pa
 test('settings dropdowns and credential dialogs stay usable at every desktop size',async({page})=>{
  await login(page);
  const configuration=(await (await page.request.get('/api/v1/settings/llm')).json()).data;
- if(configuration.key_configured){await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'移除已保存 Key'}).click();const d=page.getByRole('dialog');await d.getByRole('checkbox').check();await d.getByRole('button',{name:'确认移除密钥'}).click();await expect(d).toHaveCount(0);}
+ if(configuration.key_configured){await page.getByRole('button',{name:'设置 / 更换 Key',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'移除已保存 Key'}).click();const d=page.getByRole('dialog');await setChecked(d.getByRole('checkbox'), true);await d.getByRole('button',{name:'确认移除密钥'}).click();await expect(d).toHaveCount(0);}
  const directory=path.resolve('../docs/figma-ui/after');fs.mkdirSync(directory,{recursive:true});
- async function inViewport(locator){const r=await locator.boundingBox();const v=page.viewportSize();expect(r.x).toBeGreaterThanOrEqual(0);expect(r.y).toBeGreaterThanOrEqual(0);expect(r.x+r.width).toBeLessThanOrEqual(v.width+1);expect(r.y+r.height).toBeLessThanOrEqual(v.height+1);}
+ async function inViewport(locator){if(await locator.getAttribute('role')==='dialog')locator=page.locator('.modal:visible');await expect.poll(async()=>{const r=await locator.boundingBox(),v=page.viewportSize();return r.x>=0&&r.y>=0&&r.x+r.width<=v.width+1&&r.y+r.height<=v.height+1;}).toBe(true);const r=await locator.boundingBox();const v=page.viewportSize();expect(r.x).toBeGreaterThanOrEqual(0);expect(r.y).toBeGreaterThanOrEqual(0);expect(r.x+r.width).toBeLessThanOrEqual(v.width+1);expect(r.y+r.height).toBeLessThanOrEqual(v.height+1);}
  for(const width of [1440,1280,1024]){
   await page.setViewportSize({width,height:900});
   const trigger=page.locator('.llm-select-trigger');

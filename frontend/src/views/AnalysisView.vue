@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
+import FormSelect from "../components/FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import FormDate from "../components/FormDate.vue";
+import { ElCheckbox } from "element-plus/es/components/checkbox/index";
+import { ElInput } from "element-plus/es/components/input/index";
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api, errorMessage, json, versionHeader } from "../api";
@@ -15,6 +21,8 @@ import {
 import Icon from "../components/Icon.vue";
 import Modal from "../components/Modal.vue";
 import FinancePanel from "../components/FinancePanel.vue";
+import ReportContent from "../components/ReportContent.vue";
+import { displayTime } from "../llmTypes";
 const basis = ref<Snapshot>();
 const generationAttempt = ref<{ signature: string; key: string }>();
 const route = useRoute(),
@@ -34,6 +42,7 @@ const route = useRoute(),
   financialRead = ref(false),
   allowExternal = ref(false),
   reviewOpen = ref(false),
+  deleting = ref<Report>(),
   comment = ref(""),
   decision = ref("approved");
 const canReview = computed(
@@ -137,6 +146,31 @@ async function submit() {
     busy.value = false;
   }
 }
+async function removeReport() {
+  if (!deleting.value) return;
+  const target = deleting.value;
+  busy.value = true;
+  error.value = "";
+  success.value = "";
+  try {
+    await api(`/reports/${target.id}`, {
+      method: "DELETE",
+      headers: versionHeader(target.row_version),
+    });
+    reports.value = reports.value.filter((r) => r.id !== target.id);
+    if (selected.value?.id === target.id) {
+      selected.value = undefined;
+      if (reports.value[0]) await choose(reports.value[0].id);
+    }
+    generationAttempt.value = undefined;
+    deleting.value = undefined;
+    success.value = "报告已删除，审核与审计记录保留。";
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    busy.value = false;
+  }
+}
 async function review() {
   if (!selected.value) return;
   busy.value = true;
@@ -203,27 +237,44 @@ onMounted(async () => {
   <p v-if="error" class="error" role="alert">{{ error }}</p>
   <p v-if="success" class="success" role="status">{{ success }}</p>
   <div class="tabs">
-    <button
+    <ElButton
       :class="{ primary: tab === 'reports' }"
       @click="
         tab = 'reports';
         load();
       "
+      native-type="submit"
+      :type="tab === 'reports' ? 'primary' : 'default'"
     >
-      阶段评价报告</button
-    ><button :class="{ primary: tab === 'finance' }" @click="tab = 'finance'">
+      阶段评价报告</ElButton
+    ><ElButton
+      :class="{ primary: tab === 'finance' }"
+      @click="tab = 'finance'"
+      native-type="submit"
+      :type="tab === 'finance' ? 'primary' : 'default'"
+    >
       收付款记录
-    </button>
+    </ElButton>
   </div>
   <div v-if="tab === 'finance'" class="card filters">
     <label
-      >财务项目<select v-model="projectId" @change="changeProject">
-        <option v-for="p in projects" :key="p.id" :value="p.id">
-          {{ p.project_code }} · {{ p.project_name }}
-        </option>
-      </select></label
+      >财务项目<FormSelect
+        v-model="projectId"
+        @change="changeProject"
+        :aria-label="'财务项目'"
+      >
+        <ElOption
+          :data-ui-value="p.id"
+          v-for="p in projects"
+          :key="p.id"
+          :value="p.id"
+          :label="String(p.project_code) + ' · ' + String(p.project_name)"
+        /> </FormSelect></label
     ><label
-      >财务统计截止日<input v-model="asOf" type="date" :disabled="!!basis"
+      >财务统计截止日<FormDate
+        v-model="asOf"
+        :disabled="!!basis"
+        :aria-label="'财务统计截止日'"
     /></label>
   </div>
   <FinancePanel
@@ -236,36 +287,55 @@ onMounted(async () => {
       <h3>报告生成配置</h3>
       <p v-if="basis" class="notice">
         采用指定冻结快照 · {{ basis.payload_json.plan_version_label }} ·
-        {{ basis.as_of_date }}。后续事实变化不会改写本报告依据。<button
+        {{ basis.as_of_date }}。后续事实变化不会改写本报告依据。<ElButton
           class="text-button"
           @click="basis = undefined"
+          native-type="submit"
+          link
         >
           改用当前事实重新计算
-        </button>
+        </ElButton>
       </p>
       <label
-        >报告项目<select v-model="projectId" @change="changeProject">
-          <option v-for="p in projects" :key="p.id" :value="p.id">
-            {{ p.project_code }} · {{ p.project_name }}
-          </option>
-        </select></label
+        >报告项目<FormSelect
+          v-model="projectId"
+          @change="changeProject"
+          :aria-label="'报告项目'"
+        >
+          <ElOption
+            :data-ui-value="p.id"
+            v-for="p in projects"
+            :key="p.id"
+            :value="p.id"
+            :label="String(p.project_code) + ' · ' + String(p.project_name)"
+          /> </FormSelect></label
       ><label
-        >报告截止日<input
+        >报告截止日<FormDate
           v-model="asOf"
-          type="date"
-          :disabled="!!basis" /></label
+          :disabled="!!basis"
+          :aria-label="'报告截止日'" /></label
       ><label
-        >报告类型<select v-model="type">
-          <option value="stage">项目阶段评价报告</option>
-          <option value="exceptions">异常节点分析</option>
-          <option value="work_plan">阶段工作安排</option>
-        </select></label
-      ><label class="inline-label"
-        ><input
-          v-model="includeFinance"
-          type="checkbox"
-          :disabled="!financialRead"
-        />包含已授权财务事实</label
+        >报告类型<FormSelect v-model="type" :aria-label="'报告类型'">
+          <ElOption
+            data-ui-value="stage"
+            value="stage"
+            :label="'项目阶段评价报告'"
+          />
+          <ElOption
+            data-ui-value="exceptions"
+            value="exceptions"
+            :label="'异常节点分析'"
+          />
+          <ElOption
+            data-ui-value="work_plan"
+            value="work_plan"
+            :label="'阶段工作安排'"
+          /> </FormSelect></label
+      ><ElCheckbox
+        class="inline-label"
+        v-model="includeFinance"
+        :disabled="!financialRead"
+        >包含已授权财务事实</ElCheckbox
       ><small v-if="!financialRead" class="muted"
         >需在收付款记录中单独取得财务读取权限。</small
       >
@@ -275,12 +345,12 @@ onMounted(async () => {
           事实、数值和状态由后端确定。模型只整理已有事实引用，建议不作为业务事实。
         </p>
       </div>
-      <label v-if="config?.provider !== 'mock'" class="inline-label"
-        ><input
-          v-model="allowExternal"
-          type="checkbox"
-        />允许本次向已配置模型外送事实ID、分类和类型（不发送正文、金额、名称）</label
-      ><button
+      <ElCheckbox
+        v-if="config?.provider !== 'mock'"
+        class="inline-label"
+        v-model="allowExternal"
+        >允许本次向已配置模型外送事实ID、分类和类型（不发送正文、金额、名称）</ElCheckbox
+      ><ElButton
         class="primary generate-report"
         :disabled="
           busy ||
@@ -290,27 +360,59 @@ onMounted(async () => {
           (!allowExternal && config?.provider !== 'mock')
         "
         @click="generate"
+        native-type="submit"
+        type="primary"
       >
         <Icon name="imgVectorSparkles" />{{ busy ? "处理中…" : "生成报告草稿" }}
-      </button>
+      </ElButton>
       <p class="muted">报告由编辑生成，另一审核人批准；快照保留生成时事实。</p>
       <h3>已保存报告</h3>
-      <button :disabled="busy || !projectId" @click="load">刷新报告列表</button>
+      <ElButton
+        :disabled="busy || !projectId"
+        @click="load"
+        native-type="submit"
+        >刷新报告列表</ElButton
+      >
       <p v-if="!reports.length" class="empty">暂无可访问的报告。</p>
-      <button
+      <div
         v-for="r in reports"
         :key="r.id"
-        class="queue-item"
-        :class="{ selected: r.id === selected?.id }"
-        @click="choose(r.id)"
+        class="report-history-entry"
+        :data-report-id="r.id"
       >
-        <strong>{{ r.generated_at }}</strong
-        ><small
-          >{{ reportStatus[r.review_status] }} ·
-          {{ r.generator_type === "mock" ? "Mock" : "模型辅助"
-          }}{{ r.contains_finance ? " · 含受限财务" : "" }}</small
+        <button
+          type="button"
+          class="queue-item"
+          :class="{ selected: r.id === selected?.id }"
+          :disabled="busy"
+          @click="choose(r.id)"
         >
-      </button>
+          <strong
+            ><time :datetime="r.generated_at" :title="r.generated_at">{{
+              displayTime(r.generated_at)
+            }}</time></strong
+          ><small
+            >{{ reportStatus[r.review_status] }} ·
+            {{ r.generator_type === "mock" ? "Mock" : "模型辅助"
+            }}{{ r.contains_finance ? " · 含受限财务" : "" }}</small
+          >
+        </button>
+        <ElButton
+          v-if="auth.can(r.project_id)"
+          class="report-delete-button"
+          type="danger"
+          native-type="button"
+          link
+          :disabled="busy"
+          :aria-label="`删除报告 ${displayTime(r.generated_at)}`"
+          @click="
+            deleting = r;
+            error = '';
+            success = '';
+          "
+          >删除</ElButton
+        >
+      </div>
     </section>
     <section class="card report-preview">
       <div v-if="busy" class="empty">正在读取事实或生成报告…</div>
@@ -358,7 +460,7 @@ onMounted(async () => {
             }}</strong>
           </div>
         </div>
-        <div class="report-copy pre-wrap">{{ selected.content }}</div>
+        <ReportContent :content="selected.content" />
         <details class="report-sources">
           <summary>事实引用与来源摘要</summary>
           <p>
@@ -376,16 +478,17 @@ onMounted(async () => {
           {{ r.reviewer_id }} · {{ r.reviewed_at }}
         </p>
         <div class="actions">
-          <button
+          <ElButton
             v-if="
               ['draft', 'returned'].includes(selected.review_status) &&
               auth.can(selected.project_id)
             "
             :disabled="busy"
             @click="submit"
+            native-type="submit"
           >
-            提交报告审核</button
-          ><button
+            提交报告审核</ElButton
+          ><ElButton
             v-if="
               selected.review_status === 'pending_review' &&
               auth.can(selected.project_id, 'review')
@@ -396,8 +499,9 @@ onMounted(async () => {
               comment = '';
               decision = 'approved';
             "
+            native-type="submit"
           >
-            独立报告审核</button
+            独立报告审核</ElButton
           ><a
             class="button primary"
             :href="`/api/v1/reports/${selected.id}/export`"
@@ -416,6 +520,38 @@ onMounted(async () => {
     </section>
   </div>
   <Modal
+    v-if="deleting"
+    title="删除报告"
+    :busy="busy"
+    @close="deleting = undefined"
+  >
+    <p>
+      确认删除 {{ displayTime(deleting.generated_at) }} 生成的{{
+        reportStatus[deleting.review_status]
+      }}报告？
+    </p>
+    <p class="muted">
+      删除后将从报告列表和预览中移除，冻结事实、审核记录和操作日志仍保留。
+    </p>
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <template #footer>
+      <ElButton
+        :disabled="busy"
+        @click="deleting = undefined"
+        native-type="button"
+        >取消</ElButton
+      >
+      <ElButton
+        :disabled="busy"
+        :loading="busy"
+        @click="removeReport"
+        type="danger"
+        native-type="button"
+        >确认删除</ElButton
+      >
+    </template>
+  </Modal>
+  <Modal
     v-if="reviewOpen && selected"
     title="独立报告审核"
     :busy="busy"
@@ -423,19 +559,37 @@ onMounted(async () => {
     ><p>请核对冻结事实、来源与试算口径。本次审核不会修改报告正文。</p>
     <form id="report-review" @submit.prevent="review">
       <label
-        >报告审核结论<select v-model="decision">
-          <option value="approved">批准</option>
-          <option value="returned">退回</option>
-        </select></label
+        >报告审核结论<FormSelect
+          v-model="decision"
+          :aria-label="'报告审核结论'"
+        >
+          <ElOption data-ui-value="approved" value="approved" :label="'批准'" />
+          <ElOption
+            data-ui-value="returned"
+            value="returned"
+            :label="'退回'"
+          /> </FormSelect></label
       ><label
-        >报告审核依据 *<textarea v-model="comment" required maxlength="500" />
+        >报告审核依据 *<ElInput
+          v-model="comment"
+          required
+          maxlength="500"
+          type="textarea"
+          :aria-label="'报告审核依据 *'"
+        />
       </label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
     <template #footer
-      ><button form="report-review" class="primary" :disabled="busy">
+      ><ElButton
+        form="report-review"
+        class="primary"
+        :disabled="busy"
+        native-type="submit"
+        type="primary"
+      >
         确认报告审核
-      </button></template
+      </ElButton></template
     ></Modal
   >
 </template>

@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import PageNavigation from "../components/PageNavigation.vue";
+import { ElButton } from "element-plus/es/components/button/index";
+import FormSelect from "../components/FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
 import { onMounted, ref } from "vue";
 import { api, errorMessage } from "../api";
 import type { ActionTemplate } from "../workflowTypes";
@@ -65,145 +69,205 @@ onMounted(() => load());
       <h1>标准动作配置</h1>
       <p>将高频项目节点的准备事项沉淀为可维护模板，并通过适用条件控制匹配</p>
     </div>
-    <button
+    <ElButton
       v-if="tab === 'templates'"
       class="primary"
       :disabled="!auth.user?.is_system_admin"
       @click="open()"
+      native-type="submit"
+      type="primary"
     >
       <Icon name="imgVectorPlus" />创建动作模板
-    </button>
+    </ElButton>
   </div>
   <div class="tabs">
-    <button
+    <ElButton
       :class="{ primary: tab === 'templates' }"
       @click="tab = 'templates'"
+      native-type="submit"
+      :type="tab === 'templates' ? 'primary' : 'default'"
     >
-      动作模板</button
-    ><button :class="{ primary: tab === 'rules' }" @click="tab = 'rules'">
-      提醒规则</button
-    ><button
+      动作模板</ElButton
+    ><ElButton
+      :class="{ primary: tab === 'rules' }"
+      @click="tab = 'rules'"
+      native-type="submit"
+      :type="tab === 'rules' ? 'primary' : 'default'"
+    >
+      提醒规则</ElButton
+    ><ElButton
       :class="{ primary: tab === 'calendars' }"
       @click="tab = 'calendars'"
+      native-type="submit"
+      :type="tab === 'calendars' ? 'primary' : 'default'"
     >
       工作日历
-    </button>
+    </ElButton>
   </div>
   <p v-if="error" class="error" role="alert">
-    {{ error }} <button @click="load()">重试</button>
+    {{ error }} <ElButton @click="load()" native-type="submit">重试</ElButton>
   </p>
   <p v-if="success" class="success" role="status">{{ success }}</p>
   <template v-if="tab === 'templates'">
     <p v-if="busy" class="empty" role="status">正在加载动作模板…</p>
     <div v-else class="workflow-split template-split">
       <section class="card queue">
-        <h3>标准动作模板</h3>
-        <p class="muted">按节点类型管理 · 共{{ data.total }}个版本</p>
+        <div class="template-library-heading">
+          <h3>标准动作模板</h3>
+          <span class="badge">{{ data.total }} 个版本</span>
+        </div>
+        <p class="template-library-caption">按节点类型筛选并选择模板</p>
         <form
           class="filters compact template-filters"
           @submit.prevent="load(1)"
         >
           <label
-            >节点类型<select v-model="type">
-              <option value="">全部</option>
-              <option
+            >节点类型<FormSelect v-model="type" :aria-label="'节点类型'">
+              <ElOption data-ui-value="" value="" :label="'全部'" />
+              <ElOption
+                :data-ui-value="n.code"
                 v-for="n in catalog.nodeTypes"
                 :key="n.code"
                 :value="n.code"
-              >
-                {{ n.display_name }}
-              </option>
-            </select></label
+                :label="String(n.display_name)"
+              /> </FormSelect></label
           ><label
-            >模板状态<select v-model="status">
-              <option value="">全部</option>
-              <option
+            >模板状态<FormSelect v-model="status" :aria-label="'模板状态'">
+              <ElOption data-ui-value="" value="" :label="'全部'" />
+              <ElOption
+                :data-ui-value="s"
                 v-for="s in ['draft', 'pending_review', 'approved', 'retired']"
                 :key="s"
                 :value="s"
-              >
-                {{ label(s) }}
-              </option>
-            </select></label
-          ><button :disabled="busy">查询模板</button>
+                :label="String(label(s))"
+              /> </FormSelect></label
+          ><ElButton :disabled="busy" native-type="submit">查询模板</ElButton>
         </form>
         <p v-if="!data.items.length" class="empty">
           暂无模板，请创建后提交业务确认。
         </p>
-        <button
-          v-for="t in data.items"
-          :key="t.id"
-          class="queue-item"
-          :class="{ selected: selected?.id === t.id }"
-          @click="selected = t"
-        >
-          <strong>{{ t.title }}</strong
-          ><small
-            >{{ t.items.length }}项动作 · {{ t.version_label }} ·
-            {{ label(t.status) }}</small
-          >
-        </button>
-        <div class="pagination">
-          <button :disabled="page <= 1" @click="load(page - 1)">上一页</button
-          ><span>{{ page }}</span
-          ><button :disabled="page * 20 >= data.total" @click="load(page + 1)">
-            下一页
-          </button>
-        </div>
+        <ul class="template-list" aria-label="标准动作模板列表">
+          <li v-for="t in data.items" :key="t.id">
+            <button
+              type="button"
+              class="queue-item template-choice"
+              :class="{ selected: selected?.id === t.id }"
+              :aria-pressed="selected?.id === t.id"
+              aria-controls="template-detail"
+              @click="selected = t"
+            >
+              <span class="template-choice-meta">
+                <span>{{ t.template_code }}</span>
+                <span class="badge" :class="t.status">{{
+                  label(t.status)
+                }}</span>
+              </span>
+              <strong>{{ t.title }}</strong>
+              <small class="template-choice-meta">
+                <span
+                  >{{ t.node_type_code }} · {{ t.items.length }} 项动作</span
+                >
+                <span>{{ t.version_label }}</span>
+              </small>
+            </button>
+          </li>
+        </ul>
+        <PageNavigation
+          :page="page"
+          :total="data.total"
+          :page-size="20"
+          :disabled="busy"
+          @change="load"
+        />
       </section>
-      <section v-if="selected" class="card workflow-detail">
-        <div class="section-title">
-          <h2>{{ selected.title }}</h2>
+      <section
+        v-if="selected"
+        id="template-detail"
+        class="card workflow-detail template-detail"
+        aria-labelledby="template-title"
+      >
+        <div class="template-detail-heading">
+          <div>
+            <p class="template-version">
+              {{ selected.template_code }} / {{ selected.version_label }}
+            </p>
+            <h2 id="template-title">{{ selected.title }}</h2>
+          </div>
           <span class="badge" :class="selected.status">{{
             label(selected.status)
           }}</span>
         </div>
-        <p class="muted">
-          适用节点：{{ selected.node_type_code }} · 适用项目类型：{{
-            selected.applicability_json.project_type || "不限"
-          }}
-        </p>
-        <dl class="details">
+        <dl class="template-summary">
           <div>
-            <dt>模板编号及版本</dt>
-            <dd>{{ selected.template_code }} · {{ selected.version_label }}</dd>
+            <dt>适用节点</dt>
+            <dd>{{ selected.node_type_code }}</dd>
           </div>
           <div>
+            <dt>适用项目类型</dt>
+            <dd>{{ selected.applicability_json.project_type || "不限" }}</dd>
+          </div>
+          <div class="template-source">
             <dt>模板来源</dt>
             <dd>{{ selected.source_ref }}</dd>
           </div>
         </dl>
-        <h3>节点触发后需执行的标准动作</h3>
-        <div v-for="i in selected.items" :key="i.id" class="action-item">
-          <span class="badge">{{ i.item_code }}</span>
-          <div>
-            <strong>{{ i.title }}</strong>
-            <p class="muted">
-              责任部门：{{
-                catalog.departments.find(
-                  (d) => d.id === i.default_department_id,
-                )?.dept_name || "沿用节点责任部门"
-              }}
-            </p>
-            <p>核实依据：{{ i.completion_criteria }}</p>
-            <small
-              >所需材料：{{
-                i.materials_required_json.join("、") || "无单独材料要求"
-              }}</small
+        <div class="template-actions-heading">
+          <h3>节点触发后需执行的标准动作</h3>
+          <span>{{ selected.items.length }} 项</span>
+        </div>
+        <div class="template-action-list">
+          <article
+            v-for="i in selected.items"
+            :key="i.id"
+            class="template-action"
+          >
+            <div class="template-action-heading">
+              <h4>{{ i.title }}</h4>
+              <span class="badge">{{ i.item_code }}</span>
+            </div>
+            <dl class="template-requirements">
+              <div>
+                <dt>责任部门</dt>
+                <dd>
+                  {{
+                    catalog.departments.find(
+                      (d) => d.id === i.default_department_id,
+                    )?.dept_name || "沿用节点责任部门"
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>核实依据</dt>
+                <dd>{{ i.completion_criteria }}</dd>
+              </div>
+              <div>
+                <dt>所需材料</dt>
+                <dd>
+                  {{ i.materials_required_json.join("、") || "无单独材料要求" }}
+                </dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+        <footer class="template-toolbar">
+          <div v-if="auth.user?.is_system_admin" class="actions">
+            <ElButton
+              v-if="selected.status === 'draft'"
+              @click="open(selected)"
+              native-type="submit"
+            >
+              <Icon name="imgVectorSave" />编辑草稿</ElButton
+            ><ElButton @click="open(selected, true)" native-type="submit"
+              >创建新版本</ElButton
             >
           </div>
-        </div>
-        <div v-if="auth.user?.is_system_admin" class="actions">
-          <button v-if="selected.status === 'draft'" @click="open(selected)">
-            <Icon name="imgVectorSave" />编辑草稿</button
-          ><button @click="open(selected, true)">创建新版本</button>
-        </div>
-        <ConfigApproval
-          :key="selected.id"
-          :item="selected"
-          path="action-templates"
-          @changed="load()"
-        />
+          <ConfigApproval
+            :key="selected.id"
+            :item="selected"
+            path="action-templates"
+            @changed="load()"
+          />
+        </footer>
       </section>
       <section v-else class="card empty">
         请选择模板查看动作及业务依据。

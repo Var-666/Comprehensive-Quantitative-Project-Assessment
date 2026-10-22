@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElInput } from "element-plus/es/components/input/index";
+import FormSelect from "../components/FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import { ElCheckbox } from "element-plus/es/components/checkbox/index";
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useAuth } from "../store";
@@ -68,6 +73,13 @@ const canManageCredentials = computed(
 );
 const canAdmin = computed(() => !!auth.user?.is_system_admin);
 const available = computed(() => models.value.filter((m) => m.selectable));
+const verifiedModels = computed(() =>
+  models.value.filter(
+    (m) =>
+      m.verification_status === "available" &&
+      m.tested_revision === configuration.value?.revision,
+  ),
+);
 const defaultModel = computed(() =>
   models.value.find((m) => m.id === configuration.value?.selections.default),
 );
@@ -279,7 +291,7 @@ async function saveModel() {
     });
     await load();
     modal.value = "";
-    success.value = "已保存手动模型，尚未验证可用。";
+    success.value = "已保存手动模型；点击刷新模型自动验证，通过后显示。";
   });
 }
 async function testModel(m: LLMModel) {
@@ -306,9 +318,8 @@ async function chooseDefault(id: string | null) {
 }
 async function chooseScenario(
   scenario: "analysis" | "notification",
-  event: Event,
+  id: string,
 ) {
-  const id = (event.target as HTMLSelectElement).value;
   await run(async () => {
     const choices = {
       analysis: configuration.value?.selections.analysis || null,
@@ -391,14 +402,16 @@ onMounted(() => {
       <h1>系统设置</h1>
       <p>大模型服务配置与调用策略 · 仅授权管理员可修改</p>
     </div>
-    <button
+    <ElButton
       v-if="canAdmin"
       class="primary"
       :disabled="busy || loading || !configuration"
       @click="saveService"
+      native-type="submit"
+      type="primary"
     >
       保存配置
-    </button>
+    </ElButton>
   </div>
   <p v-if="error" class="error" role="alert">{{ error }}</p>
   <p v-if="success" class="success" role="status">{{ success }}</p>
@@ -433,22 +446,24 @@ onMounted(() => {
             <strong>{{ configuration.service_name }}</strong
             ><small>协议：OpenAI 兼容接口（兼容性待实际验证）</small>
           </div>
-          <button
+          <ElButton
             :disabled="busy"
             @click="
               modal = 'service';
               replaceEnvironment = false;
             "
+            native-type="submit"
           >
             管理服务
-          </button>
+          </ElButton>
         </div>
         <label
-          >API Base URL<input
+          >API Base URL<ElInput
             v-model="form.base_url"
             type="url"
             maxlength="500"
             :disabled="busy"
+            :aria-label="'API Base URL'"
         /></label>
         <div class="llm-key-row">
           <label
@@ -463,17 +478,25 @@ onMounted(() => {
                 {{ displayTime(configuration.credential_updated_at) }}</small
               >
             </div></label
-          ><button :disabled="busy" @click="keyModal">设置 / 更换 Key</button>
+          ><ElButton :disabled="busy" @click="keyModal" native-type="submit"
+            >设置 / 更换 Key</ElButton
+          >
         </div>
         <div class="llm-connection-actions">
-          <button
+          <ElButton
             class="primary"
             :disabled="busy"
             @click="testConnection(false)"
+            native-type="submit"
+            type="primary"
           >
-            {{ busy ? "处理中…" : "测试连接" }}</button
-          ><button :disabled="busy" @click="testConnection(true)">
-            刷新模型列表</button
+            {{ busy ? "处理中…" : "测试连接" }}</ElButton
+          ><ElButton
+            :disabled="busy"
+            @click="testConnection(true)"
+            native-type="submit"
+          >
+            刷新模型列表</ElButton
           ><small
             >上次测试：{{
               displayTime(configuration.last_connection_test?.tested_at)
@@ -491,16 +514,17 @@ onMounted(() => {
         </div>
         <label>系统默认模型</label>
         <div ref="defaultPicker" class="llm-model-select">
-          <button
+          <ElButton
             class="llm-select-trigger"
             :disabled="busy"
             :aria-expanded="defaultOpen"
             aria-controls="default-model-options"
             @click="defaultOpen = !defaultOpen"
+            native-type="submit"
           >
             {{ defaultModel?.display_name || "先连接服务并获取模型列表"
             }}<span>选择 ▾</span>
-          </button>
+          </ElButton>
           <div
             v-if="defaultOpen"
             id="default-model-options"
@@ -510,31 +534,44 @@ onMounted(() => {
             <p v-if="!available.length" class="llm-footnote">
               没有可用的已验证模型<br />请配置Key并刷新模型列表，或手动填写授权模型ID后测试。
             </p>
-            <button
+            <ElButton
               v-for="m in available"
               :key="m.id"
               @click="chooseDefault(m.id)"
+              native-type="submit"
             >
-              {{ m.display_name }}<small>{{ m.model_id }}</small></button
-            ><button v-if="defaultModel" @click="chooseDefault(null)">
+              {{ m.display_name }}<small>{{ m.model_id }}</small></ElButton
+            ><ElButton
+              v-if="defaultModel"
+              @click="chooseDefault(null)"
+              native-type="submit"
+            >
               取消默认模型
-            </button>
+            </ElButton>
             <div class="actions">
-              <button :disabled="busy" @click="testConnection(true)">
-                刷新列表</button
-              ><button @click="addModel">手动添加模型</button>
+              <ElButton
+                :disabled="busy"
+                @click="testConnection(true)"
+                native-type="submit"
+              >
+                刷新列表</ElButton
+              ><ElButton @click="addModel" native-type="submit"
+                >手动添加模型</ElButton
+              >
             </div>
           </div>
         </div>
         <h4>应用场景</h4>
         <label class="llm-scenario"
-          >项目阶段智能分析<select
-            :value="configuration.selections.analysis || ''"
+          >项目阶段智能分析<FormSelect
+            :model-value="configuration.selections.analysis || ''"
             :disabled="busy"
             @change="chooseScenario('analysis', $event)"
+            :aria-label="'项目阶段智能分析'"
           >
-            <option value="">跟随默认模型</option>
-            <option
+            <ElOption data-ui-value="" value="" :label="'跟随默认模型'" />
+            <ElOption
+              :data-ui-value="m.id"
               v-for="m in models.filter(
                 (m) =>
                   m.selectable || m.id === configuration?.selections.analysis,
@@ -542,18 +579,18 @@ onMounted(() => {
               :key="m.id"
               :value="m.id"
               :disabled="!m.selectable"
-            >
-              {{ m.display_name }}
-            </option>
-          </select></label
+              :label="String(m.display_name)"
+            /> </FormSelect></label
         ><label class="llm-scenario"
-          >通知与工作安排草稿<select
-            :value="configuration.selections.notification || ''"
+          >通知与工作安排草稿<FormSelect
+            :model-value="configuration.selections.notification || ''"
             :disabled="busy"
             @change="chooseScenario('notification', $event)"
+            :aria-label="'通知与工作安排草稿'"
           >
-            <option value="">跟随默认模型</option>
-            <option
+            <ElOption data-ui-value="" value="" :label="'跟随默认模型'" />
+            <ElOption
+              :data-ui-value="m.id"
               v-for="m in models.filter(
                 (m) =>
                   m.selectable ||
@@ -562,16 +599,14 @@ onMounted(() => {
               :key="m.id"
               :value="m.id"
               :disabled="!m.selectable"
-            >
-              {{ m.display_name }}
-            </option>
-          </select></label
-        >
+              :label="String(m.display_name)"
+            /> </FormSelect
+        ></label>
         <div class="llm-enable-row">
           <div>
             <strong>AI 功能启用状态</strong><small>{{ stateText }}</small>
           </div>
-          <button
+          <ElButton
             class="llm-toggle"
             role="switch"
             :aria-checked="
@@ -580,13 +615,14 @@ onMounted(() => {
             aria-label="启用实际模型调用"
             :disabled="busy"
             @click="toggleService"
+            native-type="submit"
           >
             <img
               v-if="!configuration.enabled || configuration.mode === 'mock'"
               src="/icons/toggle-off.svg"
               alt="未启用"
             /><span v-else class="llm-toggle-on">已启用</span>
-          </button>
+          </ElButton>
         </div>
         <small class="muted"
           >模型选择即时保存；业务调用仍需用户本次同意外送。</small
@@ -598,90 +634,101 @@ onMounted(() => {
         <div>
           <h3>可用模型</h3>
           <p>
-            刷新后自动测试未验证的已启用模型，每次最多128个输出token；已验证模型跳过。基础测试验证短文本调用，报告还须通过结构化输出和事实引用校验。
+            仅展示当前配置下基础调用验证通过的模型。刷新后自动验证未通过或未测试的已启用模型；报告仍须通过结构化输出和事实引用校验。
           </p>
         </div>
         <div class="actions">
-          <button :disabled="busy" @click="testConnection(true)">
-            刷新模型</button
-          ><button class="primary" :disabled="busy" @click="addModel">
+          <ElButton
+            :disabled="busy"
+            @click="testConnection(true)"
+            native-type="submit"
+          >
+            刷新模型</ElButton
+          ><ElButton
+            class="primary"
+            :disabled="busy"
+            @click="addModel"
+            native-type="submit"
+            type="primary"
+          >
             ＋ 手动添加模型
-          </button>
+          </ElButton>
         </div>
       </div>
       <div v-if="autoTesting" class="notice" role="status" aria-live="polite">
         正在自动验证 {{ autoProgress.completed }}/{{ autoProgress.total }}：{{
           autoProgress.model
         }}
-        <button @click="stopAutoTesting = true" :disabled="stopAutoTesting">
+        <ElButton
+          @click="stopAutoTesting = true"
+          :disabled="stopAutoTesting"
+          native-type="submit"
+        >
           {{ stopAutoTesting ? "等待当前测试结束…" : "停止后续测试" }}
-        </button>
+        </ElButton>
       </div>
-      <div class="table-wrap">
-        <table class="llm-table">
-          <thead>
-            <tr>
-              <th>模型 ID</th>
-              <th>显示名称</th>
-              <th>来源</th>
-              <th>基础调用验证</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="m in models" :key="m.id">
-              <td>
-                {{ m.model_id
-                }}<small
-                  v-if="m.id === configuration.selections.default"
-                  class="block active"
-                  >系统默认模型</small
-                >
-              </td>
-              <td>{{ m.display_name }}</td>
-              <td>
-                {{ m.source === "manual" ? "手动录入" : "接口发现"
-                }}<small class="block muted"
-                  >最近获取 {{ displayTime(m.last_discovered_at) }}</small
-                >
-              </td>
-              <td>
-                <span class="badge">{{ llmState[m.verification_status] }}</span
-                ><small class="block muted"
-                  >{{ m.enabled ? "已启用" : "已禁用" }} ·
-                  {{ displayTime(m.last_tested_at) }}</small
-                >
-                <small
-                  v-if="m.last_test_result && !m.last_test_result.ok"
-                  class="block muted"
-                >
-                  {{ m.last_test_result.message }}
-                </small>
-              </td>
-              <td>
-                <div class="actions">
-                  <button :disabled="busy || !m.enabled" @click="testModel(m)">
-                    测试模型</button
-                  ><button :disabled="busy" @click="toggleModel(m)">
-                    {{ m.enabled ? "禁用" : "启用" }}</button
-                  ><button
-                    v-if="m.source === 'manual'"
-                    :disabled="busy"
-                    @click="deleting = m"
-                  >
-                    删除
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div v-if="!models.length" class="empty llm-model-empty">
-        <strong>暂未获取到可用模型</strong>
+      <ul
+        v-if="verifiedModels.length"
+        class="llm-model-grid"
+        aria-label="已验证模型"
+      >
+        <li
+          v-for="m in verifiedModels"
+          :key="m.id"
+          class="llm-model-tile"
+          :data-model-id="m.model_id"
+        >
+          <div class="llm-model-tile-title">
+            <strong :title="m.display_name">{{ m.display_name }}</strong>
+            <span class="badge verified">{{
+              llmState[m.verification_status]
+            }}</span>
+          </div>
+          <p class="llm-model-id" :title="m.model_id">{{ m.model_id }}</p>
+          <div class="llm-model-meta">
+            <span>{{ m.source === "manual" ? "手动录入" : "接口发现" }}</span>
+            <span
+              v-if="m.id === configuration.selections.default"
+              class="badge active"
+              >系统默认模型</span
+            >
+            <span v-if="!m.enabled" class="badge">已禁用</span>
+          </div>
+          <p class="llm-model-tested">
+            验证于 {{ displayTime(m.last_tested_at) }}
+          </p>
+          <div class="actions">
+            <ElButton
+              :disabled="busy || !m.enabled"
+              @click="testModel(m)"
+              native-type="submit"
+            >
+              测试模型</ElButton
+            ><ElButton
+              :disabled="busy"
+              @click="toggleModel(m)"
+              native-type="submit"
+            >
+              {{ m.enabled ? "禁用" : "启用" }}</ElButton
+            ><ElButton
+              v-if="m.source === 'manual'"
+              :disabled="busy"
+              @click="deleting = m"
+              native-type="submit"
+            >
+              删除
+            </ElButton>
+          </div>
+        </li>
+      </ul>
+      <div v-else class="empty llm-model-empty">
+        <strong>{{
+          autoTesting ? "正在验证模型…" : "暂无测试通过的模型"
+        }}</strong>
         <p>
-          API Key 和服务连接确认后再刷新；未获取到列表时请手动录入准确的模型
-          ID。
+          配置 API Key
+          后刷新模型，通过验证后会自动显示；平台不提供模型列表时，可手动添加准确的模型
+          ID 后刷新验证。
         </p>
       </div>
       <p v-if="configuration.last_models_refresh" class="llm-footnote">
@@ -696,13 +743,23 @@ onMounted(() => {
       ><span
         >配置保存、连接测试、模型刷新和删除均由后端鉴权；密钥不会通过
         GET、日志或报表明文返回。</span
-      ><button class="text-button" :disabled="busy" @click="showAudit()">
+      ><ElButton
+        class="text-button"
+        :disabled="busy"
+        @click="showAudit()"
+        native-type="submit"
+        link
+      >
         操作审计
-      </button>
+      </ElButton>
     </div></template
-  ><button v-else-if="canAdmin && !loading" @click="load(true)">
+  ><ElButton
+    v-else-if="canAdmin && !loading"
+    @click="load(true)"
+    native-type="submit"
+  >
     重新加载配置
-  </button>
+  </ElButton>
   <Modal
     v-if="modal === 'key' && configuration"
     title="配置 API Key"
@@ -723,7 +780,7 @@ onMounted(() => {
       <label
         >新的 API Key *
         <div class="llm-password">
-          <input
+          <ElInput
             v-model="keyInput"
             :type="showKey ? 'text' : 'password'"
             autocomplete="new-password"
@@ -731,13 +788,14 @@ onMounted(() => {
             maxlength="8192"
             :disabled="!canManageCredentials || busy"
             placeholder="请输入 API Key，输入过程以密码形式遮挡"
-          /><button
+          /><ElButton
             class="text-button"
-            type="button"
             @click="showKey = !showKey"
+            native-type="button"
+            link
           >
             {{ showKey ? "隐藏" : "显示" }}
-          </button>
+          </ElButton>
         </div></label
       >
       <div class="llm-modal-facts">
@@ -746,11 +804,11 @@ onMounted(() => {
         <p>• 页面仅显示“已配置”及更新时间，不可回显、复制旧 Key。</p>
         <p>• 更换和移除密钥需要系统管理员权限并记录脱敏审计。</p>
       </div>
-      <label v-if="configuration.source === 'environment'" class="llm-checkbox"
-        ><input
-          v-model="replaceEnvironment"
-          type="checkbox"
-        />确认接管旧环境配置，后续不再回退使用环境Key</label
+      <ElCheckbox
+        v-if="configuration.source === 'environment'"
+        class="llm-checkbox"
+        v-model="replaceEnvironment"
+        >确认接管旧环境配置，后续不再回退使用环境Key</ElCheckbox
       >
       <p v-if="!canManageCredentials" class="notice warning">
         当前入口不允许提交密钥，请使用 HTTPS，或通过 scripts/dev.sh
@@ -764,19 +822,21 @@ onMounted(() => {
       </p>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
-    <button
+    <ElButton
       :disabled="busy || !configuration.key_configured || !canManageCredentials"
       @click="
         keyInput = '';
         modal = 'remove';
         removeConfirmed = false;
       "
+      native-type="submit"
     >
-      移除已保存 Key</button
+      移除已保存 Key</ElButton
     ><small class="muted">移除操作需要再次确认，本页不展示真实密钥值。</small
     ><template #footer
-      ><button :disabled="busy" @click="close">取消</button
-      ><button
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
+        >取消</ElButton
+      ><ElButton
         class="primary"
         form="llm-key-form"
         :disabled="
@@ -785,9 +845,11 @@ onMounted(() => {
           !configuration.encryption_ready ||
           (configuration.source === 'environment' && !replaceEnvironment)
         "
+        native-type="submit"
+        type="primary"
       >
         保存新密钥
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -796,20 +858,22 @@ onMounted(() => {
     :busy="busy"
     @close="close"
     ><p>移除后，新请求无法继续使用旧密钥；不会回退使用环境凭据。</p>
-    <label class="llm-checkbox"
-      ><input v-model="removeConfirmed" type="checkbox" />确认移除已保存的
-      Key</label
+    <ElCheckbox class="llm-checkbox" v-model="removeConfirmed"
+      >确认移除已保存的 Key</ElCheckbox
     >
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <template #footer
-      ><button :disabled="busy" @click="close">取消</button
-      ><button
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
+        >取消</ElButton
+      ><ElButton
         class="primary"
         :disabled="busy || !removeConfirmed"
         @click="removeKey"
+        native-type="submit"
+        type="primary"
       >
         确认移除密钥
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -826,16 +890,18 @@ onMounted(() => {
     </div>
     <form id="llm-model-form" @submit.prevent="saveModel">
       <label
-        >模型 ID *<input
+        >模型 ID *<ElInput
           v-model="manual.model_id"
           required
           maxlength="256"
-          placeholder="请输入模型提供方返回的 model ID（不可凭名称推测）" /></label
+          placeholder="请输入模型提供方返回的 model ID（不可凭名称推测）"
+          :aria-label="'模型 ID *'" /></label
       ><label
-        >显示名称（可选）<input
+        >显示名称（可选）<ElInput
           v-model="manual.display_name"
           maxlength="256"
           placeholder="仅供界面辨识"
+          :aria-label="'显示名称（可选）'"
       /></label>
       <div class="llm-modal-facts">
         <h3>允许使用的场景</h3>
@@ -853,10 +919,17 @@ onMounted(() => {
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
     <template #footer
-      ><button :disabled="busy" @click="close">取消</button
-      ><button form="llm-model-form" class="primary" :disabled="busy">
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
+        >取消</ElButton
+      ><ElButton
+        form="llm-model-form"
+        class="primary"
+        :disabled="busy"
+        native-type="submit"
+        type="primary"
+      >
         保存模型
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -908,14 +981,16 @@ onMounted(() => {
       无效或模型不可用。
     </p>
     <template #footer
-      ><button @click="close">关闭结果</button
-      ><button
+      ><ElButton @click="close" native-type="submit">关闭结果</ElButton
+      ><ElButton
         v-if="!configuration.key_configured"
         class="primary"
         @click="keyModal"
+        native-type="submit"
+        type="primary"
       >
         前往 API Key 配置
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -929,68 +1004,86 @@ onMounted(() => {
       @submit.prevent="saveService"
     >
       <label class="full"
-        >服务名称 *<input
+        >服务名称 *<ElInput
           v-model="form.service_name"
           required
-          maxlength="120" /></label
+          maxlength="120"
+          :aria-label="'服务名称 *'" /></label
       ><label class="full"
-        >API Base URL *<input
+        >API Base URL *<ElInput
           v-model="form.base_url"
           type="url"
           required
-          maxlength="500" /></label
+          maxlength="500"
+          :aria-label="'API Base URL *'" /></label
       ><label
-        >服务适配器<select v-model="form.adapter">
-          <option value="openai_compatible">OpenAI 兼容候选（需验证）</option>
-        </select></label
+        >服务适配器<FormSelect
+          v-model="form.adapter"
+          :aria-label="'服务适配器'"
+        >
+          <ElOption
+            data-ui-value="openai_compatible"
+            value="openai_compatible"
+            :label="'OpenAI 兼容候选（需验证）'"
+          /> </FormSelect></label
       ><label
-        >请求超时（秒）<input
+        >请求超时（秒）<ElInput
           v-model.number="form.timeout_seconds"
           type="number"
           min="1"
           max="60"
-          required /></label
+          required
+          :aria-label="'请求超时（秒）'" /></label
       ><label
-        >调用模式<select v-model="form.mode">
-          <option value="mock">明确标记 Mock</option>
-          <option value="maas">真实 MaaS</option>
-        </select></label
-      ><label class="llm-checkbox"
-        ><input v-model="form.enabled" type="checkbox" />允许实际业务调用</label
+        >调用模式<FormSelect v-model="form.mode" :aria-label="'调用模式'">
+          <ElOption
+            data-ui-value="mock"
+            value="mock"
+            :label="'明确标记 Mock'"
+          />
+          <ElOption
+            data-ui-value="maas"
+            value="maas"
+            :label="'真实 MaaS'"
+          /> </FormSelect></label
+      ><ElCheckbox class="llm-checkbox" v-model="form.enabled"
+        >允许实际业务调用</ElCheckbox
       >
       <p class="notice warning full">
         仅允许部署白名单中的HTTPS地址。变更地址将清除旧Key、默认与场景选择；旧地址模型记录保留但隔离。
       </p>
-      <label
+      <ElCheckbox
         v-if="configuration.source === 'environment'"
         class="llm-checkbox full"
-        ><input
-          v-model="replaceEnvironment"
-          type="checkbox"
-        />明确接管旧环境配置（不自动复制旧Key）</label
+        v-model="replaceEnvironment"
+        >明确接管旧环境配置（不自动复制旧Key）</ElCheckbox
       >
       <p v-if="error" class="error full" role="alert">{{ error }}</p>
     </form>
     <template #footer
-      ><button
+      ><ElButton
         v-if="configuration.source === 'environment'"
         :disabled="
           busy || !canManageCredentials || !configuration.encryption_ready
         "
         @click="modal = 'import'"
+        native-type="submit"
       >
-        迁移旧环境配置</button
-      ><button :disabled="busy" @click="close">取消</button
-      ><button
+        迁移旧环境配置</ElButton
+      ><ElButton :disabled="busy" @click="close" native-type="submit"
+        >取消</ElButton
+      ><ElButton
         class="primary"
         form="llm-service-form"
         :disabled="
           busy ||
           (configuration.source === 'environment' && !replaceEnvironment)
         "
+        native-type="submit"
+        type="primary"
       >
         保存服务配置
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -1003,14 +1096,16 @@ onMounted(() => {
     </p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <template #footer
-      ><button @click="close">取消</button
-      ><button
+      ><ElButton @click="close" native-type="submit">取消</ElButton
+      ><ElButton
         class="primary"
         :disabled="busy || !canManageCredentials"
         @click="importEnvironment"
+        native-type="submit"
+        type="primary"
       >
         确认加密迁移
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -1023,10 +1118,17 @@ onMounted(() => {
     </p>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <template #footer
-      ><button @click="deleting = undefined">取消</button
-      ><button class="primary" :disabled="busy" @click="deleteModel">
+      ><ElButton @click="deleting = undefined" native-type="submit"
+        >取消</ElButton
+      ><ElButton
+        class="primary"
+        :disabled="busy"
+        @click="deleteModel"
+        native-type="submit"
+        type="primary"
+      >
         确认删除模型
-      </button></template
+      </ElButton></template
     ></Modal
   >
   <Modal
@@ -1035,10 +1137,18 @@ onMounted(() => {
     drawer
     @close="close"
     ><div class="tabs">
-      <button :disabled="busy" @click="showAudit('events')">配置审计</button
-      ><button :disabled="busy" @click="showAudit('calls')">
+      <ElButton
+        :disabled="busy"
+        @click="showAudit('events')"
+        native-type="submit"
+        >配置审计</ElButton
+      ><ElButton
+        :disabled="busy"
+        @click="showAudit('calls')"
+        native-type="submit"
+      >
         脱敏调用日志
-      </button>
+      </ElButton>
     </div>
     <p v-if="!auditRows.length" class="empty">暂无记录。</p>
     <div v-for="(row, i) in auditRows" :key="i" class="fact-box">

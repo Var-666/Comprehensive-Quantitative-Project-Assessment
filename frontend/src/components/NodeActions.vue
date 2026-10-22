@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
+import {
+  ElCheckbox,
+  ElCheckboxGroup,
+} from "element-plus/es/components/checkbox/index";
 import { onMounted, ref } from "vue";
 import { api, errorMessage, json } from "../api";
 import { useAuth } from "../store";
@@ -68,14 +73,15 @@ onMounted(load);
   <section class="form-section">
     <div class="section-title">
       <h3>关联标准动作</h3>
-      <button
+      <ElButton
         :disabled="
           !auth.can(node.project_id) || node.lifecycle_status !== 'active'
         "
         @click="open"
+        native-type="submit"
       >
         关联动作模板
-      </button>
+      </ElButton>
     </div>
     <p v-if="error && !show" class="error" role="alert">{{ error }}</p>
     <p v-if="success" class="success" role="status">{{ success }}</p>
@@ -110,38 +116,43 @@ onMounted(load);
     <p v-if="!busy && !templates.length" class="empty">
       没有可用的批准模板，请先前往标准动作模块配置。
     </p>
-    <section v-for="t in templates" :key="t.id" class="form-section">
-      <h3>{{ t.template_code }} · {{ t.title }} · {{ t.version_label }}</h3>
-      <label v-for="i in t.items" :key="i.id" class="checkbox-line action-item"
-        ><input
-          v-model="selected"
-          type="checkbox"
+    <ElCheckboxGroup v-model="selected"
+      ><section v-for="t in templates" :key="t.id" class="form-section">
+        <h3>{{ t.template_code }} · {{ t.title }} · {{ t.version_label }}</h3>
+        <ElCheckbox
+          v-for="i in t.items"
+          :key="i.id"
+          class="checkbox-line action-item"
           :value="i.id"
           :disabled="
             links.some(
               (l) => l.status === 'active' && l.snapshot_json.id === i.id,
             )
           "
-        /><span
-          >{{ i.item_code }} {{ i.title
-          }}<small class="subline"
-            >核实依据：{{ i.completion_criteria }}</small
-          ></span
-        ></label
-      >
-    </section>
+          ><span
+            >{{ i.item_code }} {{ i.title
+            }}<small class="subline"
+              >核实依据：{{ i.completion_criteria }}</small
+            ></span
+          ></ElCheckbox
+        >
+      </section></ElCheckboxGroup
+    >
     <p class="notice">
       关联动作生成的是准备工作，任务反馈及核实不会自动改变节点实际完成事实。
     </p>
     <template #footer
-      ><button :disabled="busy" @click="show = false">取消</button
-      ><button
+      ><ElButton :disabled="busy" @click="show = false" native-type="submit"
+        >取消</ElButton
+      ><ElButton
         :disabled="busy || !selected.length"
         class="primary"
         @click="save"
+        native-type="submit"
+        type="primary"
       >
         保存关联配置
-      </button></template
+      </ElButton></template
     ></Modal
   >
 </template>

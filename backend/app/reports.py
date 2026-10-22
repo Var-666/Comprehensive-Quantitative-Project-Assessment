@@ -120,6 +120,8 @@ def generate(db, project, snapshot, data, key, request_id):
     )
     if existing:
         check_finance(db, db.info["principal"], existing)
+        if existing.deleted_at is not None:
+            fail(409, "REPORT_DELETED", "该生成请求对应的报告已删除，请使用新的生成请求")
         if existing.request_digest != request_digest:
             fail(409, "IDEMPOTENCY_CONFLICT", "幂等键已用于另一生成请求")
         return existing
@@ -163,6 +165,12 @@ def generate(db, project, snapshot, data, key, request_id):
     db.add(obj)
     audit(db, obj, "generate_report", request_id)
     return obj
+
+
+def remove(db, obj, request_id):
+    before = record(obj)
+    obj.deleted_at = now()
+    audit(db, obj, "delete_report", request_id, before)
 
 
 def submit(db, obj, request_id):

@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import { useRoute } from "vue-router";
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElDatePicker } from "element-plus/es/components/date-picker/index";
+import {
+  ElForm,
+  ElFormItem,
+  type FormInstance,
+} from "element-plus/es/components/form/index";
+import { ElOption, ElSelect } from "element-plus/es/components/select/index";
+import { ElPagination } from "element-plus/es/components/pagination/index";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useAuth, useCatalog } from "../store";
 import type { Page, Project } from "../types";
@@ -75,6 +84,7 @@ const scan = reactive({
   previewed: false,
   project: "",
 });
+const scanForm = ref<FormInstance>();
 const canWrite = computed(
   () => !!selected.value && auth.can(selected.value.project_id),
 );
@@ -175,6 +185,7 @@ async function review() {
   );
 }
 async function run(generate = false) {
+  if (!(await scanForm.value?.validate().catch(() => false))) return;
   busy.value = true;
   error.value = "";
   try {
@@ -233,33 +244,40 @@ onMounted(async () => {
       <h1>提醒与待办</h1>
       <p>按照计划日期与标准动作生成待办，重要通知先审核再发布</p>
     </div>
-    <button class="primary" @click="switchTab('scan')">
+    <ElButton type="primary" class="primary" @click="switchTab('scan')">
       <Icon name="imgVectorPlus" />手动创建提醒
-    </button>
+    </ElButton>
   </div>
   <div class="workbench-toolbar">
     <div class="tabs">
-      <button
+      <ElButton
         :class="{ primary: tab === 'notices' }"
+        :type="tab === 'notices' ? 'primary' : 'default'"
         @click="switchTab('notices')"
       >
-        通知队列</button
-      ><button
+        通知队列</ElButton
+      ><ElButton
         :class="{ primary: tab === 'tasks' }"
+        :type="tab === 'tasks' ? 'primary' : 'default'"
         @click="switchTab('tasks')"
       >
-        执行任务</button
-      ><button
+        执行任务</ElButton
+      ><ElButton
         :class="{ primary: tab === 'inbox' }"
+        :type="tab === 'inbox' ? 'primary' : 'default'"
         @click="switchTab('inbox')"
       >
-        站内收件箱</button
-      ><button :class="{ primary: tab === 'scan' }" @click="switchTab('scan')">
+        站内收件箱</ElButton
+      ><ElButton
+        :class="{ primary: tab === 'scan' }"
+        :type="tab === 'scan' ? 'primary' : 'default'"
+        @click="switchTab('scan')"
+      >
         提醒扫描
-      </button>
+      </ElButton>
     </div>
     <p v-if="error" class="error" role="alert">
-      {{ error }} <button @click="load()">重试</button>
+      {{ error }} <ElButton @click="load()">重试</ElButton>
     </p>
     <p v-if="success" class="success" role="status">{{ success }}</p>
     <form
@@ -267,17 +285,36 @@ onMounted(async () => {
       class="filters compact"
       @submit.prevent="load()"
     >
-      <label
-        >筛选项目<select v-model="projectId">
-          <option value="">全部授权项目</option>
-          <option v-for="p in projects" :key="p.id" :value="p.id">
-            {{ p.project_code }} · {{ p.project_name }}
-          </option>
-        </select></label
-      ><label
-        >工作状态<select v-model="status">
-          <option value="">全部</option>
-          <option
+      <label for="work-project"
+        >筛选项目<ElSelect
+          id="work-project"
+          v-model="projectId"
+          aria-label="筛选项目"
+          filterable
+          :disabled="busy"
+          :empty-values="[undefined, null]"
+          popper-class="project-element-popper"
+          class="work-project-select"
+        >
+          <ElOption label="全部授权项目" value="" />
+          <ElOption
+            v-for="p in projects"
+            :key="p.id"
+            :value="p.id"
+            :label="`${p.project_code} · ${p.project_name}`"
+          /> </ElSelect></label
+      ><label for="work-status"
+        >工作状态<ElSelect
+          id="work-status"
+          v-model="status"
+          aria-label="工作状态"
+          :disabled="busy"
+          :empty-values="[undefined, null]"
+          popper-class="project-element-popper"
+          class="work-status-select"
+        >
+          <ElOption label="全部" value="" />
+          <ElOption
             v-for="s in tab === 'notices'
               ? [
                   'draft',
@@ -298,13 +335,11 @@ onMounted(async () => {
                 ]"
             :key="s"
             :value="s"
-          >
-            {{ label(s) }}
-          </option>
-        </select></label
+            :label="label(s)"
+          /> </ElSelect></label
       ><label v-if="tab === 'tasks'" class="checkbox-line"
         ><input v-model="mine" type="checkbox" />仅看分派给我</label
-      ><button :disabled="busy">查询工作</button>
+      ><ElButton native-type="submit" :loading="busy">查询工作</ElButton>
     </form>
   </div>
   <p v-if="busy" class="muted" role="status">正在处理…</p>
@@ -331,20 +366,18 @@ onMounted(async () => {
           }}个{{ label(n.fact_snapshot_json.day_basis) }}</small
         >
       </button>
-      <div class="pagination">
-        <button
-          :disabled="busy || notices.page <= 1"
-          @click="load(notices.page - 1)"
-        >
-          上一页</button
-        ><span>{{ notices.page }}</span
-        ><button
-          :disabled="busy || notices.page * 20 >= notices.total"
-          @click="load(notices.page + 1)"
-        >
-          下一页
-        </button>
-      </div>
+      <ElPagination
+        class="work-pagination"
+        :current-page="notices.page"
+        :page-size="20"
+        :total="notices.total"
+        :disabled="busy"
+        layout="prev, pager, next"
+        prev-text="上一页"
+        next-text="下一页"
+        :pager-count="5"
+        @current-change="load"
+      />
     </section>
     <section v-if="selected" class="card workflow-detail">
       <div class="section-title">
@@ -388,13 +421,13 @@ onMounted(async () => {
           type="checkbox"
         />允许本次外送事实ID与分类（不含正文）</label
       >
-      <button
+      <ElButton
         v-if="editable"
         :disabled="busy || (!aiConsent && aiConfig?.provider !== 'mock')"
         @click="arrangeDraft"
       >
         AI 整理通知草稿
-      </button>
+      </ElButton>
       <template v-if="editable"
         ><label
           >通知标题<input
@@ -404,20 +437,21 @@ onMounted(async () => {
         ><label
           >通知正文<textarea
             v-model="edit.body"
-            rows="10"
+            :rows="10"
             required
             maxlength="12000"
           />
         </label>
         <div class="actions">
-          <button
+          <ElButton
             :disabled="busy || !edit.title.trim() || !edit.body.trim()"
             @click="
               mutate('draft', edit, 'PATCH', '草稿修订已保存，需重新审核')
             "
           >
-            <Icon name="imgVectorSave" />保存通知草稿</button
-          ><button
+            <Icon name="imgVectorSave" />保存通知草稿</ElButton
+          ><ElButton
+            type="primary"
             class="primary"
             :disabled="
               busy ||
@@ -429,7 +463,7 @@ onMounted(async () => {
             "
           >
             提交通知审核
-          </button>
+          </ElButton>
         </div>
         <p
           v-if="edit.title !== selected.title || edit.body !== selected.body"
@@ -444,19 +478,21 @@ onMounted(async () => {
       </div>
       <div class="actions">
         <template v-if="selected.status === 'pending_review'"
-          ><button
+          ><ElButton
             :disabled="busy || !canReview"
             @click="openReview('returned')"
           >
-            <Icon name="imgVectorUndo2" />退回修改</button
-          ><button
+            <Icon name="imgVectorUndo2" />退回修改</ElButton
+          ><ElButton
+            type="primary"
             class="primary"
             :disabled="busy || !canReview"
             @click="openReview('approved')"
           >
             <Icon name="imgVectorCheck" />审核通过
-          </button></template
-        ><button
+          </ElButton></template
+        ><ElButton
+          type="primary"
           v-if="selected.status === 'approved_pending_send'"
           class="primary"
           :disabled="busy || !canWrite"
@@ -469,7 +505,7 @@ onMounted(async () => {
             )
           "
         >
-          发布站内通知</button
+          发布站内通知</ElButton
         ><RouterLink
           class="button"
           :to="`/milestones?project=${selected.project_id}`"
@@ -524,7 +560,7 @@ onMounted(async () => {
               <span class="badge" :class="t.status">{{ label(t.status) }}</span>
             </td>
             <td>{{ t.requires_review ? t.review_reason : "—" }}</td>
-            <td><button @click="showTask = t">处理任务</button></td>
+            <td><ElButton @click="showTask = t">处理任务</ElButton></td>
           </tr>
         </tbody>
       </table>
@@ -532,17 +568,18 @@ onMounted(async () => {
     <p v-if="!tasks.items.length && !busy" class="empty">
       暂无符合条件的任务。
     </p>
-    <div class="pagination">
-      <button :disabled="busy || tasks.page <= 1" @click="load(tasks.page - 1)">
-        上一页</button
-      ><span>第{{ tasks.page }}页</span
-      ><button
-        :disabled="busy || tasks.page * 20 >= tasks.total"
-        @click="load(tasks.page + 1)"
-      >
-        下一页
-      </button>
-    </div>
+    <ElPagination
+      class="work-pagination"
+      :current-page="tasks.page"
+      :page-size="20"
+      :total="tasks.total"
+      :disabled="busy"
+      layout="prev, pager, next"
+      prev-text="上一页"
+      next-text="下一页"
+      :pager-count="5"
+      @current-change="load"
+    />
   </section>
   <section v-if="tab === 'inbox'" class="card workflow-detail">
     <h3>我的站内消息</h3>
@@ -552,7 +589,7 @@ onMounted(async () => {
     <section v-for="m in inbox" :key="m.id" class="form-section">
       <div class="section-title">
         <h3>{{ m.title }}</h3>
-        <button v-if="!m.read_at" @click="read(m)">标记已读</button
+        <ElButton v-if="!m.read_at" @click="read(m)">标记已读</ElButton
         ><span v-else class="muted">已读</span>
       </div>
       <p class="pre-wrap">{{ m.body }}</p>
@@ -564,37 +601,73 @@ onMounted(async () => {
     <p class="notice">
       先预览确定性计算结果，再显式生成草稿与待办。自动扫描进程使用当前业务日期；此处开发/测试环境可选模拟日期，正式环境只能生成当天结果。
     </p>
-    <form class="form-grid" @submit.prevent="run(false)">
-      <label
-        >扫描项目 *<select
+    <ElForm
+      ref="scanForm"
+      :model="scan"
+      class="form-grid work-scan-form"
+      label-position="top"
+      @submit.prevent="run(false)"
+    >
+      <ElFormItem
+        label="扫描项目"
+        prop="project"
+        :rules="[
+          { required: true, message: '请选择扫描项目', trigger: 'change' },
+        ]"
+      >
+        <ElSelect
           v-model="scan.project"
-          required
+          aria-label="扫描项目 *"
+          filterable
+          :disabled="busy"
+          placeholder="请选择项目"
+          popper-class="project-element-popper"
           @change="scan.previewed = false"
         >
-          <option value="">请选择项目</option>
-          <option v-for="p in projects" :key="p.id" :value="p.id">
-            {{ p.project_code }} · {{ p.project_name }}
-          </option>
-        </select></label
-      ><label
-        >统计 / 扫描日期 *<input
+          <ElOption
+            v-for="p in projects"
+            :key="p.id"
+            :value="p.id"
+            :label="`${p.project_code} · ${p.project_name}`"
+          />
+        </ElSelect>
+      </ElFormItem>
+      <ElFormItem
+        label="统计 / 扫描日期"
+        prop="as_of"
+        :rules="[
+          {
+            required: true,
+            message: '请选择有效扫描日期',
+            trigger: 'change',
+          },
+        ]"
+      >
+        <ElDatePicker
           v-model="scan.as_of"
+          aria-label="统计 / 扫描日期 *"
           type="date"
-          required
+          format="YYYY-MM-DD"
+          value-format="YYYY-MM-DD"
+          :clearable="false"
+          :disabled="busy"
+          popper-class="project-element-popper"
           @change="scan.previewed = false"
-      /></label>
+        />
+      </ElFormItem>
       <div class="actions">
-        <button :disabled="busy">预览提醒计算</button
-        ><button
-          type="button"
+        <ElButton native-type="submit" :loading="busy">预览提醒计算</ElButton
+        ><ElButton
+          type="primary"
+          native-type="button"
           class="primary"
           :disabled="busy || !scan.previewed || !auth.user?.is_system_admin"
           @click="run(true)"
         >
           确认生成草稿与待办
-        </button>
+        </ElButton>
       </div>
-    </form>
+    </ElForm>
     <p v-if="scan.generated !== null" class="success" role="status">
       本次生成{{ scan.generated }}条，未自动审核或发送。
     </p>
@@ -659,21 +732,22 @@ onMounted(async () => {
           v-model="reviewComment"
           required
           maxlength="500"
-          rows="3"
+          :rows="3"
         />
       </label>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </form>
     <template #footer
-      ><button :disabled="busy" @click="reviewAction = ''">返回修改</button
-      ><button
+      ><ElButton :disabled="busy" @click="reviewAction = ''">返回修改</ElButton
+      ><ElButton
+        type="primary"
         class="primary"
         form="notice-review"
-        type="submit"
+        native-type="submit"
         :disabled="busy || !confirmed"
       >
         {{ reviewAction === "approved" ? "确认审核通过" : "确认退回修改" }}
-      </button></template
+      </ElButton></template
     >
   </Modal>
 </template>

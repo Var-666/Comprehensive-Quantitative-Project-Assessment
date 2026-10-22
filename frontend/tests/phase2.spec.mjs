@@ -1,3 +1,4 @@
+import { choose, setChecked } from './ui-controls.mjs';
 import {test,expect} from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,7 +25,7 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  let d=page.getByRole('dialog');
  await d.getByLabel('模板编号 *',{exact:true}).fill('AT-BROWSER');
  await d.getByLabel('模板名称 *',{exact:true}).fill('浏览器阶段收款准备');
- await d.getByLabel('适用节点类型 *').selectOption('阶段收款');
+ await choose(d.getByLabel('适用节点类型 *'), '阶段收款');
  await d.getByLabel('模板来源 *').fill('浏览器验证配置，不是真实业务模板');
  await d.getByLabel('动作名称 *').fill('浏览器整理资料');
  await d.getByLabel('完成判定及核实依据 *').fill('模拟资料清单经独立核对');
@@ -41,9 +42,9 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  d=page.getByRole('dialog');
  await d.getByLabel('配置编号 *').fill('RR-BROWSER');
  await d.getByLabel('配置依据 *').fill('仅浏览器验收：提前7自然日给项目管理员');
- await d.getByLabel('适用节点类型 *').selectOption('阶段收款');
+ await choose(d.getByLabel('适用节点类型 *'), '阶段收款');
  await d.getByLabel('提前天数 *').fill('7');
- await d.getByLabel('接收角色').selectOption('admin');
+ await choose(d.getByLabel('接收角色'), 'admin');
  await d.getByRole('button',{name:'保存配置草稿'}).click();
  await expect(d).toHaveCount(0);
  await page.locator('.workflow-config').filter({hasText:'RR-BROWSER'}).getByRole('button',{name:'提交业务确认'}).click();
@@ -52,22 +53,30 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await approveConfig(page,page.locator('.workflow-config').filter({hasText:'RR-BROWSER'}));
  await switchUser(page,'accept-editor');
  await page.getByRole('link',{name:'节点管理',exact:true}).click();
- await page.getByLabel('所属项目').selectOption({label:'P-H028 · 7500DWT 化学品船'});
+ await choose(page.getByLabel('所属项目'), {label:'P-H028 · 7500DWT 化学品船'});
+ await expect(page.getByRole('combobox',{name:'计划版本',exact:true})).toBeEnabled();
  const row=page.getByRole('row').filter({hasText:'H028-N011'});
+ while(await row.count()===0){
+  const next=page.getByRole('button',{name:'下一页',exact:true});await expect(next).toBeEnabled();
+  const loaded=page.waitForResponse(r=>new URL(r.url()).pathname.endsWith('/milestones')&&r.request().method()==='GET');
+  await next.click();await loaded;await expect(page.getByText('正在加载节点…',{exact:true})).toHaveCount(0);
+ }
  await expect(row).toBeVisible();
  await row.getByRole('button',{name:'查看详情',exact:true}).click();
  await page.getByRole('button',{name:'关联动作模板'}).click();
  d=page.getByRole('dialog').last();
- await d.getByRole('checkbox').first().check();
+ await setChecked(d.getByRole('checkbox').first(), true);
  await d.getByRole('button',{name:'保存关联配置'}).click();
  await expect(page.getByRole('dialog')).toHaveCount(1);
  await page.getByRole('dialog').getByRole('button',{name:'关闭',exact:true}).last().click();
  await page.getByRole('link',{name:'提醒与待办',exact:true}).click();
  await page.getByRole('button',{name:'提醒扫描',exact:true}).click();
- await page.getByLabel('扫描项目 *').selectOption({label:'P-H028 · 7500DWT 化学品船'});
+ await page.locator('.el-select').filter({has:page.getByRole('combobox',{name:'扫描项目 *',exact:true})}).click();
+ await page.getByRole('option',{name:'P-H028 · 7500DWT 化学品船',exact:true}).click();
  await page.getByLabel('统计 / 扫描日期 *').fill('2026-10-19');
+ await page.getByLabel('统计 / 扫描日期 *').press('Tab');
  await page.getByRole('button',{name:'预览提醒计算'}).click();
- await expect(page.locator('tbody')).toContainText('可生成');
+ await expect(page.locator('main .table-wrap tbody')).toContainText('可生成');
  await page.getByRole('button',{name:'确认生成草稿与待办'}).click();
  await expect(page.getByText('本次生成1条，未自动审核或发送。')).toBeVisible();
  await page.getByRole('button',{name:'确认生成草稿与待办'}).click();
@@ -83,7 +92,7 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await page.goto('/tasks');
  await page.getByRole('button',{name:'审核通过',exact:true}).click();
  d=page.getByRole('dialog');
- await d.getByRole('checkbox').check();
+ await setChecked(d.getByRole('checkbox'), true);
  await d.getByLabel('审核意见 *').fill('核对计划、动作与接收人');
  await d.getByRole('button',{name:'确认审核通过'}).click();
  await expect(d).toHaveCount(0);
@@ -102,15 +111,15 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await page.getByRole('button',{name:'处理任务'}).first().click();
  d=page.getByRole('dialog');
  fs.mkdirSync(path.resolve('../docs/figma-ui/after'),{recursive:true});
- for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:900});const rect=await d.boundingBox();expect(rect.width).toBe(600);expect(rect.x+rect.width).toBe(width);expect(rect.height).toBe(900);await page.screenshot({path:path.resolve(`../docs/figma-ui/after/task-drawer-${width}.png`)});}
+ for(const width of [1440,1280,1024]){await page.setViewportSize({width,height:900});await expect.poll(async()=>{const r=await d.boundingBox();return r.x+r.width;}).toBe(width);const rect=await d.boundingBox();expect(rect.width).toBe(600);expect(rect.x+rect.width).toBe(width);expect(rect.height).toBe(900);await page.screenshot({path:path.resolve(`../docs/figma-ui/after/task-drawer-${width}.png`)});}
  await page.setViewportSize({width:1440,height:1000});
- await d.getByLabel('分派执行人 *').selectOption({label:'验收编制人员'});
+ await choose(d.getByLabel('分派执行人 *'), {label:'验收编制人员'});
  await d.getByRole('button',{name:'保存任务分派'}).click();
  await expect(d).toContainText('待处理');
  await d.getByRole('button',{name:'执行反馈',exact:true}).click();
  await d.getByLabel('处理情况与执行结果 *').fill('已完成模拟资料准备');
  await d.getByLabel('来源 / 证据说明 *').fill('模拟清单，不是真实企业证据');
- await d.getByRole('checkbox').check();
+ await setChecked(d.getByRole('checkbox'), true);
  await d.getByRole('button',{name:'提交执行反馈'}).click();
  await expect(d).toContainText('反馈待核实');
  await expect(d.getByRole('button',{name:'核实接受'})).toHaveCount(0);
@@ -127,7 +136,7 @@ test('real pages close actions, notifications, inbox, tasks and independent feed
  await d.getByRole('button',{name:'操作记录',exact:true}).click();
  await expect(d).toContainText('verify_feedback');
  await d.getByRole('button',{name:'关闭',exact:true}).last().click();
- await expect(page.locator('tbody')).toContainText('已核实完成');
+ await expect(page.locator('main .table-wrap tbody')).toContainText('已核实完成');
  await page.getByRole('button',{name:'通知队列',exact:true}).click();
  await page.screenshot({path:'test-results/phase2-workbench.png',fullPage:true});
  for(const width of [1440,1280,1024]){
@@ -161,10 +170,10 @@ test('calendar draft approval and working-day calculation are available through 
  d=page.getByRole('dialog');
  await d.getByLabel('配置编号 *').fill('RR-WORK-BROWSER');
  await d.getByLabel('配置依据 *').fill('仅测试3工作日');
- await d.getByLabel('适用节点类型 *').selectOption('设计资料');
+ await choose(d.getByLabel('适用节点类型 *'), '设计资料');
  await d.getByLabel('提前天数 *').fill('3');
- await d.getByLabel('日期口径').selectOption('workday');
- await d.getByLabel('企业日历 *').selectOption({label:'CAL-BROWSER · V1'});
+ await choose(d.getByLabel('日期口径'), 'workday');
+ await choose(d.getByLabel('企业日历 *'), {label:'CAL-BROWSER · V1'});
  await d.getByRole('button',{name:'保存配置草稿'}).click();
  await expect(d).toHaveCount(0);
  const rule=page.locator('.workflow-config').filter({hasText:'RR-WORK-BROWSER'});

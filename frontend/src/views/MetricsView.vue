@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import PageNavigation from "../components/PageNavigation.vue";
+import FormDate from "../components/FormDate.vue";
+import { ElButton } from "element-plus/es/components/button/index";
+import FormSelect from "../components/FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api, errorMessage, json } from "../api";
@@ -174,27 +179,39 @@ onMounted(async () => {
     </div>
     <div class="actions">
       <div v-if="!selected" class="metric-date-controls">
-        <label>业务统计截止日<input v-model="asOf" type="date" /></label>
-        <button :disabled="busy || !asOf" @click="load">计算评价</button>
+        <label
+          >业务统计截止日<FormDate
+            v-model="asOf"
+            :aria-label="'业务统计截止日'"
+        /></label>
+        <ElButton :disabled="busy || !asOf" @click="load" native-type="submit"
+          >计算评价</ElButton
+        >
       </div>
-      <button v-if="selected" @click="selected = undefined">返回项目评价</button
+      <ElButton
+        v-if="selected"
+        @click="selected = undefined"
+        native-type="submit"
+        >返回项目评价</ElButton
       ><a
         v-else
         class="button primary"
         :href="`/api/v1/metrics/export?as_of=${loadedAsOf}`"
         ><Icon name="imgVectorFileDown" />导出评价数据</a
-      ><button
+      ><ElButton
         v-if="selected"
         class="primary"
         :disabled="busy || !auth.can(selected.project_id)"
         @click="prepareReport"
+        native-type="submit"
+        type="primary"
       >
         生成阶段报告
-      </button>
+      </ElButton>
     </div>
   </div>
   <p v-if="error" class="error" role="alert">
-    {{ error }} <button @click="load">重新加载</button>
+    {{ error }} <ElButton @click="load" native-type="submit">重新加载</ElButton>
   </p>
   <p v-if="success" class="success" role="status">{{ success }}</p>
   <div v-if="selected" class="card filters">
@@ -203,20 +220,28 @@ onMounted(async () => {
       >截止 {{ selected.as_of_date }} ·
       {{ selected.sample ? "模拟测试数据" : "业务数据" }}</span
     ><span class="muted">计算 {{ selected.computed_at }}</span
-    ><button
+    ><ElButton
       v-if="auth.can(selected.project_id)"
       :disabled="busy"
       @click="freeze"
+      native-type="submit"
     >
-      保存评价快照</button
+      保存评价快照</ElButton
     ><label
-      >已保存快照<select v-model="snapshotId" @change="openSnapshot">
-        <option value="">当前计算结果</option>
-        <option v-for="s in history" :key="s.id" :value="s.id">
-          {{ s.as_of_date }} · {{ s.created_at }}
-        </option>
-      </select></label
-    >
+      >已保存快照<FormSelect
+        v-model="snapshotId"
+        @change="openSnapshot"
+        :aria-label="'已保存快照'"
+      >
+        <ElOption data-ui-value="" value="" :label="'当前计算结果'" />
+        <ElOption
+          :data-ui-value="s.id"
+          v-for="s in history"
+          :key="s.id"
+          :value="s.id"
+          :label="String(s.as_of_date) + ' · ' + String(s.created_at)"
+        /> </FormSelect
+    ></label>
   </div>
   <p v-if="busy" class="empty">正在计算或读取证据…</p>
   <template v-else-if="counts"
@@ -232,9 +257,14 @@ onMounted(async () => {
         }}</strong
         ><small
           >O / (O + L)
-          <button class="text-button" @click="formula = true">
+          <ElButton
+            class="text-button"
+            @click="formula = true"
+            native-type="submit"
+            link
+          >
             查看口径
-          </button></small
+          </ElButton></small
         >
       </div>
       <div class="card stat">
@@ -297,9 +327,14 @@ onMounted(async () => {
           }}</strong>
         </p>
         <p class="muted">{{ data?.formula.boundary }}</p>
-        <button class="text-button" @click="formula = true">
+        <ElButton
+          class="text-button"
+          @click="formula = true"
+          native-type="submit"
+          link
+        >
           查看评价口径与数据依据 →
-        </button>
+        </ElButton>
       </section>
     </div>
     <section v-if="!selected" class="card table-card">
@@ -308,10 +343,11 @@ onMounted(async () => {
         <span class="muted">统计截止 {{ loadedAsOf }} · trial_v1</span>
       </div>
       <div class="table-wrap">
-        <table>
+        <table class="metric-list-table">
           <thead>
             <tr>
-              <th>项目编号 / 名称</th>
+              <th>项目编号</th>
+              <th>项目名称</th>
               <th>计划版本</th>
               <th>应完成</th>
               <th>按期完成</th>
@@ -325,9 +361,9 @@ onMounted(async () => {
           <tbody>
             <tr v-for="p in data?.projects" :key="p.project_id">
               <td>
-                <strong>{{ p.project_code }}</strong
-                ><small class="block muted">{{ p.project_name }}</small>
+                <strong>{{ p.project_code }}</strong>
               </td>
+              <td>{{ p.project_name }}</td>
               <td>{{ p.plan_version_label }}</td>
               <td>{{ p.counts.due_total }}</td>
               <td>{{ p.counts.on_time_completed }}</td>
@@ -342,7 +378,13 @@ onMounted(async () => {
                 }}
               </td>
               <td>
-                <button class="text-button" @click="choose(p)">评价明细</button>
+                <ElButton
+                  class="text-button"
+                  @click="choose(p)"
+                  native-type="submit"
+                  link
+                  >评价明细</ElButton
+                >
               </td>
             </tr>
           </tbody>
@@ -357,24 +399,29 @@ onMounted(async () => {
       <div class="section-title">
         <h3>节点评价与异常追溯</h3>
         <label
-          >评价分类<select v-model="category" @change="page = 1">
-            <option value="">全部节点</option>
-            <option
+          >评价分类<FormSelect
+            v-model="category"
+            @change="page = 1"
+            :aria-label="'评价分类'"
+          >
+            <ElOption data-ui-value="" value="" :label="'全部节点'" />
+            <ElOption
+              :data-ui-value="key"
               v-for="(label, key) in categoryLabels"
               :key="key"
               :value="key"
-            >
-              {{ label }}
-            </option>
-          </select></label
-        >
+              :label="String(label)"
+            /> </FormSelect
+        ></label>
       </div>
       <div class="table-wrap">
-        <table>
+        <table class="metric-list-table">
           <thead>
             <tr>
-              <th>节点编号 / 名称</th>
-              <th>类型 / 部门</th>
+              <th>节点编号</th>
+              <th>节点名称</th>
+              <th>节点类型</th>
+              <th>责任部门</th>
               <th>计划日期</th>
               <th>已核实实际日期</th>
               <th>偏差天数</th>
@@ -384,14 +431,10 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="r in displayRows" :key="r.milestone_id">
-              <td>
-                {{ r.milestone_code
-                }}<small class="block muted">{{ r.milestone_name }}</small>
-              </td>
-              <td>
-                {{ r.node_type_code
-                }}<small class="block muted">{{ r.department }}</small>
-              </td>
+              <td>{{ r.milestone_code }}</td>
+              <td>{{ r.milestone_name }}</td>
+              <td>{{ r.node_type_code }}</td>
+              <td>{{ r.department }}</td>
               <td>{{ r.planned_date }}</td>
               <td>{{ r.actual_date || "待核对" }}</td>
               <td>{{ r.deviation_days ?? "—" }}</td>
@@ -399,22 +442,27 @@ onMounted(async () => {
                 <span class="badge">{{ categoryLabels[r.category] }}</span>
               </td>
               <td>
-                <button class="text-button" @click="evidence = r">
+                <ElButton
+                  class="text-button"
+                  @click="evidence = r"
+                  native-type="submit"
+                  link
+                >
                   证据追溯
-                </button>
+                </ElButton>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
       <p v-if="!rows.length" class="empty">该分类没有节点。</p>
-      <div class="pagination">
-        <span>共 {{ rows.length }} 条 · 第 {{ page }} 页</span
-        ><button :disabled="page === 1" @click="page--">上一页</button
-        ><button :disabled="page * 20 >= rows.length" @click="page++">
-          下一页
-        </button>
-      </div>
+      <PageNavigation
+        :page="page"
+        :total="rows.length"
+        :page-size="20"
+        :disabled="busy"
+        @change="page = $event"
+      />
       <small class="muted"
         >来源摘要
         {{ selected.source_digest }}；表格与指标使用同一次计算证据。</small

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElInput } from "element-plus/es/components/input/index";
 import { computed, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useAuth } from "../store";
@@ -46,45 +48,51 @@ async function perform(kind: string) {
 <template>
   <p v-if="error" class="error" role="alert">{{ error }}</p>
   <div class="actions">
-    <button
+    <ElButton
       v-if="item.status === 'draft' && auth.user?.is_system_admin"
       :disabled="busy"
       class="primary"
       @click="perform('submit-review')"
+      native-type="submit"
+      type="primary"
     >
       <Icon name="imgVectorSend" />提交业务确认
-    </button>
+    </ElButton>
     <template v-if="item.status === 'pending_review'">
-      <button
+      <ElButton
         :disabled="busy || !canReview"
         class="primary"
         @click="
           action = 'approved';
           basis = '';
         "
+        native-type="submit"
+        type="primary"
       >
         独立批准
-      </button>
-      <button
+      </ElButton>
+      <ElButton
         :disabled="busy || !canReview"
         @click="
           action = 'returned';
           basis = '';
         "
+        native-type="submit"
       >
         退回配置
-      </button>
+      </ElButton>
     </template>
-    <button
+    <ElButton
       v-if="item.status === 'approved' && auth.user?.is_system_admin"
       :disabled="busy"
       @click="
         action = 'retire';
         basis = '';
       "
+      native-type="submit"
     >
       停用此版本
-    </button>
+    </ElButton>
   </div>
   <p v-if="item.approval_ref" class="muted">
     最近审核依据：{{ item.approval_ref }}
@@ -103,26 +111,30 @@ async function perform(kind: string) {
       @submit.prevent="perform(action === 'retire' ? 'retire' : 'review')"
     >
       <label
-        >批准依据 / 退回或停用原因 *<textarea
+        >批准依据 / 退回或停用原因 *<ElInput
           v-model="basis"
           required
           maxlength="500"
-          rows="4"
+          :rows="4"
+          type="textarea"
+          :aria-label="'批准依据 / 退回或停用原因 *'"
         />
       </label>
     </form>
     <template #footer
-      ><button :disabled="busy" @click="action = ''">取消</button
-      ><button
+      ><ElButton :disabled="busy" @click="action = ''" native-type="submit"
+        >取消</ElButton
+      ><ElButton
         class="primary"
-        type="submit"
         form="config-approval"
         :disabled="busy"
+        native-type="submit"
+        type="primary"
       >
         确认{{
           action === "retire" ? "停用" : action === "returned" ? "退回" : "批准"
         }}
-      </button></template
+      </ElButton></template
     >
   </Modal>
 </template>

@@ -1,3 +1,4 @@
+import { choose, optionValues } from './ui-controls.mjs';
 import {test, expect} from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,6 +26,8 @@ async function login(page, user='accept-editor') {
 }
 
 async function contained(locator) {
+  locator=locator.page().locator('.modal:visible');
+  await expect.poll(async()=>{const r=await locator.boundingBox();const v=locator.page().viewportSize();return !!r&&r.x>=-1&&r.y>=-1&&r.x+r.width<=v.width+1&&r.y+r.height<=v.height+1;}).toBe(true);
   const rect=await locator.boundingBox();
   const viewport=locator.page().viewportSize();
   expect(rect).not.toBeNull();
@@ -93,28 +96,28 @@ for (const [url, pattern, message] of failures) {
   });
 }
 
-test('native dropdowns can select, close and reopen across all workspaces',async({page})=>{
+test('Element dropdowns can select, close and reopen across all migrated workspaces',async({page})=>{
   test.setTimeout(90000);
+  fs.mkdirSync(evidenceRoot,{recursive:true});
   await login(page);
   let exercised=0, expected=0;const coverage=[];
   for(const [name,url,title] of screens) {
     await page.goto(url);
     await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
     await page.waitForLoadState('networkidle');
-    const count=await page.locator('select:visible').count();
-    const eligible=await page.locator('select:visible').evaluateAll(items=>items.map((s,index)=>({index,enabled:!s.disabled&&[...s.options].some(o=>!o.disabled)})).filter(s=>s.enabled).map(s=>s.index));const enabled=eligible.length;expected+=enabled;
+    const controls=page.locator('.ui-select-field input[role="combobox"]:visible');
+    const count=await controls.count();
+    const eligible=[];for(let i=0;i<count;i++)if(await controls.nth(i).isEnabled())eligible.push(i);
+    const enabled=eligible.length;expected+=enabled;
     const start=exercised;
     for(const i of eligible) {
-      const select=page.locator('select:visible').nth(i);
-      await expect(select).toBeEnabled();
-      const choices=await select.evaluate(s=>[...s.options].filter(o=>!o.disabled).map(o=>o.value));
+      const select=controls.nth(i);
+      const choices=await optionValues(select);
       if(!choices.length)continue;
-      await select.focus();await select.press('Space');await select.press('Escape');
-      await select.selectOption(choices[choices.length-1]);
+      await choose(select,choices[choices.length-1]);
       await page.waitForLoadState('networkidle');
       await expect(select).toBeEnabled();
-      await select.focus();await select.press('Space');await select.press('Escape');
-      await select.selectOption(choices[0]);
+      await choose(select,choices[0]);
       await page.waitForLoadState('networkidle');
       exercised++;
     }
@@ -122,7 +125,7 @@ test('native dropdowns can select, close and reopen across all workspaces',async
   }
   fs.writeFileSync(path.join(evidenceRoot,'dropdown-coverage.json'),JSON.stringify(coverage,null,2)+'\n');
   expect(exercised).toBe(expected);
-  expect(coverage.filter(row=>row.exercised>0).map(row=>row.name)).toEqual(['projects','milestones','actions','tasks','analysis','settings']);
+  expect(coverage.filter(row=>row.exercised>0).map(row=>row.name)).toEqual(['projects','milestones','actions','analysis','settings']);
 });
 
 test('forms and drawers remain inside the viewport and cancel preserves data',async({page})=>{
@@ -139,10 +142,10 @@ test('forms and drawers remain inside the viewport and cancel preserves data',as
     await contained(dialog);
     await dialog.getByRole('button',{name:'保存并进入详情'}).click();
     expect(await dialog.locator('#project-form').evaluate(f=>f.checkValidity())).toBe(false);
-    for(const select of await dialog.locator('select').all()) {
-      const values=await select.evaluate(s=>[...s.options].filter(o=>!o.disabled).map(o=>o.value));
-      await select.selectOption(values[values.length-1]);
-      await select.selectOption(values[0]);
+    for(const select of await dialog.locator('.ui-select-field input[role="combobox"]').all()) {
+      const values=await optionValues(select);
+      await choose(select, values[values.length-1]);
+      await choose(select, values[0]);
     }
     await page.screenshot({path:path.join(evidenceRoot,`project-form-${width}.png`)});
     await dialog.getByRole('button',{name:'取消',exact:true}).click();
@@ -178,14 +181,14 @@ test('late project responses cannot overwrite the currently selected node plan',
     await route.continue();
   });
   const request=page.waitForRequest(r=>new URL(r.url()).pathname===`/api/v1/projects/${slow.id}`);
-  await page.getByLabel('所属项目').selectOption(slow.id);await request;
+  await choose(page.getByLabel('所属项目'), slow.id);await request;
   await expect(page.getByRole('combobox',{name:'计划版本',exact:true})).toBeDisabled();
-  await page.getByLabel('所属项目').selectOption(current.id);
+  await choose(page.getByLabel('所属项目'), current.id);
   await expect(page.getByRole('combobox',{name:'计划版本',exact:true})).toBeEnabled();
   release();await page.waitForLoadState('networkidle');
-  await expect(page.getByLabel('所属项目')).toHaveValue(current.id);
+  await expect(page.locator('.el-select').filter({has:page.getByRole('combobox',{name:'所属项目',exact:true})})).toContainText(current.project_code);
   await expect(page.locator('.project-context-meta')).toContainText('王工');
-  await expect(page.locator('tbody')).toContainText('H014-');
+  await expect(page.locator('main .table-wrap tbody')).toContainText('H014-');
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 

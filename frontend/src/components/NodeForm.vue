@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { ElInput } from "element-plus/es/components/input/index";
+import FormSelect from "./FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import FormDate from "./FormDate.vue";
+import { ElButton } from "element-plus/es/components/button/index";
 import { onMounted, reactive, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import { useCatalog } from "../store";
@@ -72,72 +77,99 @@ async function save() {
         <h3>节点基本信息</h3>
         <div class="form-grid">
           <label
-            >节点编号 *<input
+            >节点编号 *<ElInput
               v-model="form.milestone_code"
               required
               maxlength="64"
-              :readonly="!!node" /></label
+              :readonly="!!node"
+              :aria-label="'节点编号 *'" /></label
           ><label
-            >节点名称 *<input
+            >节点名称 *<ElInput
               v-model="form.milestone_name"
               required
               maxlength="200"
+              :aria-label="'节点名称 *'"
           /></label>
           <label
-            >节点类型 *<select v-model="form.node_type_code" required>
-              <option value="" disabled>请选择</option>
-              <option
+            >节点类型 *<FormSelect
+              v-model="form.node_type_code"
+              required
+              :aria-label="'节点类型 *'"
+            >
+              <ElOption data-ui-value="" value="" disabled :label="'请选择'" />
+              <ElOption
+                :data-ui-value="t.code"
                 v-for="t in catalog.nodeTypes"
                 :key="t.code"
                 :value="t.code"
-              >
-                {{ t.display_name }}
-              </option>
-            </select></label
+                :label="String(t.display_name)"
+              /> </FormSelect></label
           ><label
-            >计划完成日期 *<input
+            >计划完成日期 *<FormDate
               v-model="form.planned_date"
-              type="date"
               required
+              :aria-label="'计划完成日期 *'"
           /></label>
           <label
-            >责任部门<select v-model="form.department_id">
-              <option value="">未指定</option>
-              <option
+            >责任部门<FormSelect
+              v-model="form.department_id"
+              :aria-label="'责任部门'"
+            >
+              <ElOption data-ui-value="" value="" :label="'未指定'" />
+              <ElOption
+                :data-ui-value="d.id"
                 v-for="d in catalog.departments"
                 :key="d.id"
                 :value="d.id"
-              >
-                {{ d.dept_name }}
-              </option>
-            </select></label
+                :label="String(d.dept_name)"
+              /> </FormSelect></label
           ><label
-            >责任人<select v-model="form.owner_id">
-              <option value="">未指定</option>
-              <option v-for="u in catalog.users" :key="u.id" :value="u.id">
-                {{ u.display_name }}
-              </option>
-            </select></label
-          >
+            >责任人<FormSelect v-model="form.owner_id" :aria-label="'责任人'">
+              <ElOption data-ui-value="" value="" :label="'未指定'" />
+              <ElOption
+                :data-ui-value="u.id"
+                v-for="u in catalog.users"
+                :key="u.id"
+                :value="u.id"
+                :label="String(u.display_name)"
+              /> </FormSelect
+          ></label>
           <label
-            >日期性质<select v-model="form.date_kind">
-              <option value="internal_plan">内部计划</option>
-              <option value="contractual">合同约定（需来源）</option>
-              <option value="unconfirmed">待确认</option>
-            </select></label
+            >日期性质<FormSelect
+              v-model="form.date_kind"
+              :aria-label="'日期性质'"
+            >
+              <ElOption
+                data-ui-value="internal_plan"
+                value="internal_plan"
+                :label="'内部计划'"
+              />
+              <ElOption
+                data-ui-value="contractual"
+                value="contractual"
+                :label="'合同约定（需来源）'"
+              />
+              <ElOption
+                data-ui-value="unconfirmed"
+                value="unconfirmed"
+                :label="'待确认'"
+              /> </FormSelect></label
           ><label
-            >日期依据说明<input
+            >日期依据说明<ElInput
               v-model="form.source_ref"
               maxlength="500"
               :required="form.date_kind === 'contractual'"
+              :aria-label="'日期依据说明'"
           /></label>
         </div>
         <label
-          >录入 / 变更原因 *<textarea
+          >录入 / 变更原因 *<ElInput
             v-model="form.change_reason"
             required
             maxlength="2000"
-            rows="2"
+            :rows="2"
+            type="textarea"
+            :aria-label="'录入 / 变更原因 *'"
           />
         </label>
       </section>
@@ -146,10 +178,17 @@ async function save() {
       </p>
     </form>
     <template #footer
-      ><button :disabled="busy" @click="emit('close')">取消</button
-      ><button type="submit" form="node-form" class="primary" :disabled="busy">
+      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+        >取消</ElButton
+      ><ElButton
+        form="node-form"
+        class="primary"
+        :disabled="busy"
+        native-type="submit"
+        type="primary"
+      >
         {{ busy ? "保存中…" : "保存节点" }}
-      </button></template
+      </ElButton></template
     >
   </Modal>
 </template>

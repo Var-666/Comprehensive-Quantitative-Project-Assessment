@@ -1,6 +1,8 @@
 import os
 import subprocess
 import sys
+from datetime import datetime, timezone
+from uuid import uuid4
 
 from sqlalchemy import inspect
 
@@ -27,6 +29,9 @@ def test_migration_roundtrip_and_postgres_ddl(tmp_path):
     checks = schema.get_check_constraints("milestone_actual_records")
     assert len(checks) == 3
     assert any(
+        c["name"] == "deleted_at" and c["nullable"] for c in schema.get_columns("report_drafts")
+    )
+    assert any(
         fk["referred_table"] == "project_plan_versions"
         for fk in schema.get_foreign_keys("projects")
     )
@@ -40,6 +45,7 @@ def test_migration_roundtrip_and_postgres_ddl(tmp_path):
     assert "UUID NOT NULL" in ddl
     assert "ALTER TABLE projects ADD CONSTRAINT fk_current_plan" in ddl
     assert "CREATE UNIQUE INDEX uq_current_actual" in ddl
+    assert "ALTER TABLE report_drafts ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE" in ddl
 
 
 def test_model_id_migration_preserves_reports_reviews_and_constraints(tmp_path):
@@ -70,26 +76,29 @@ def test_model_id_migration_preserves_reports_reviews_and_constraints(tmp_path):
         )
         db.add(snapshot)
         db.flush()
-        report = ReportDraft(
-            project_id=project.id,
-            metric_snapshot_id=snapshot.id,
-            request_key="migration-fixture",
-            request_digest="migration-fixture",
-            report_type="stage",
-            fact_bundle_json={"evidence": "migration fixture"},
-            generator_type="mock",
-            model_id="existing-model-id",
-            content="报告内容必须原样保留",
-            validation_json={},
-            contains_finance=False,
-            review_status="approved",
-            created_by="compiler",
-            editor_ids=["compiler"],
+        report_id = str(uuid4())
+        # Insert only columns available in the historical schema under test.
+        db.execute(
+            ReportDraft.__table__.insert().values(
+                id=report_id,
+                project_id=project.id,
+                metric_snapshot_id=snapshot.id,
+                request_key="migration-fixture",
+                request_digest="migration-fixture",
+                report_type="stage",
+                fact_bundle_json={"evidence": "migration fixture"},
+                generator_type="mock",
+                model_id="existing-model-id",
+                content="报告内容必须原样保留",
+                validation_json={},
+                contains_finance=False,
+                review_status="approved",
+                created_by="compiler",
+                editor_ids=["compiler"],
+            )
         )
-        db.add(report)
-        db.flush()
         review = ReportReview(
-            report_id=report.id,
+            report_id=report_id,
             decision="approved",
             comment="独立核对通过",
             reviewer_id="reviewer",
@@ -97,7 +106,6 @@ def test_model_id_migration_preserves_reports_reviews_and_constraints(tmp_path):
         )
         db.add(review)
         db.commit()
-        report_id = report.id
         review_id = review.id
     assert len(inspect(engine).get_check_constraints("report_drafts")) == 2
     alembic("upgrade", "head", url=url)
@@ -105,6 +113,7 @@ def test_model_id_migration_preserves_reports_reviews_and_constraints(tmp_path):
     with Session(engine) as db:
         assert db.get(ReportDraft, report_id).content == "报告内容必须原样保留"
         assert db.get(ReportDraft, report_id).model_id == "existing-model-id"
+        assert db.get(ReportDraft, report_id).deleted_at is None
         assert db.get(ReportReview, review_id).report_id == report_id
         db.get(ReportDraft, report_id).model_id = "long-provider-id-" + ("x" * 150)
         db.commit()
@@ -114,7 +123,20 @@ def test_model_id_migration_preserves_reports_reviews_and_constraints(tmp_path):
         assert "不能截断或清空" in exc.stderr
     else:
         raise AssertionError("回滚不得丢弃超出旧字段的模型来源")
+    # Earlier downgrade steps may have succeeded before the model-ID guard stopped SQLite.
+    alembic("upgrade", "head", url=url)
     with Session(engine) as db:
         assert len(db.get(ReportDraft, report_id).model_id) > 120
+        assert db.get(ReportReview, review_id).comment == "独立核对通过"
+        db.get(ReportDraft, report_id).deleted_at = datetime.now(timezone.utc)
+        db.commit()
+    try:
+        alembic("downgrade", "5e93d62bcf40", url=url)
+    except subprocess.CalledProcessError as exc:
+        assert "丢失删除标记" in exc.stderr
+    else:
+        raise AssertionError("回滚不得丢失报告删除标记")
+    with Session(engine) as db:
+        assert db.get(ReportDraft, report_id).deleted_at is not None
         assert db.get(ReportReview, review_id).comment == "独立核对通过"
     engine.dispose()

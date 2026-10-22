@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
+import { ElInput } from "element-plus/es/components/input/index";
+import FormSelect from "./FormSelect.vue";
+import { ElOption } from "element-plus/es/components/select/index";
+import FormDate from "./FormDate.vue";
 import { onMounted, reactive, ref } from "vue";
 import { api, errorMessage, json, versionHeader } from "../api";
 import type { Milestone } from "../types";
@@ -17,7 +22,7 @@ const detail = ref<Milestone>(props.node),
 const cancelReason = ref("");
 const section = ref("info");
 function jump(event: Event, value: string) {
-  const dialog = (event.currentTarget as HTMLElement).closest("dialog");
+  const dialog = (event.currentTarget as HTMLElement).closest(".modal");
   const body = dialog?.querySelector<HTMLElement>(".modal-body");
   const target = dialog?.querySelector<HTMLElement>(
     `[data-node-section="${value}"]`,
@@ -120,7 +125,7 @@ onMounted(load);
   >
     <template #navigation
       ><nav class="drawer-tabs" aria-label="节点详情区段">
-        <button
+        <ElButton
           v-for="(title, key) in {
             info: '节点信息',
             actions: '标准动作',
@@ -130,9 +135,10 @@ onMounted(load);
           :key="key"
           :class="{ active: section === key }"
           @click="jump($event, key)"
+          native-type="submit"
         >
           {{ title }}
-        </button>
+        </ElButton>
       </nav></template
     >
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -174,12 +180,15 @@ onMounted(load);
         </p>
         <form @submit.prevent="cancelNode">
           <label
-            >业务取消原因 *<textarea
+            >业务取消原因 *<ElInput
               v-model="cancelReason"
               required
               maxlength="500"
-            /></label
-          ><button :disabled="busy">确认取消节点</button>
+              type="textarea"
+              :aria-label="'业务取消原因 *'" /></label
+          ><ElButton :disabled="busy" native-type="submit"
+            >确认取消节点</ElButton
+          >
         </form>
       </details>
       <p v-else class="notice">节点已取消，保留历史计划及事实记录。</p>
@@ -189,34 +198,53 @@ onMounted(load);
       <form @submit.prevent="submit">
         <div class="form-grid">
           <label
-            >完成事实<select
+            >完成事实<FormSelect
               v-model="form.completion_flag"
               aria-label="完成事实"
             >
-              <option value="unknown">未知 / 待核对</option>
-              <option value="true">已完成（待核实）</option>
-              <option value="false">尚未完成（待核实）</option>
-            </select></label
+              <ElOption
+                data-ui-value="unknown"
+                value="unknown"
+                :label="'未知 / 待核对'"
+              />
+              <ElOption
+                data-ui-value="true"
+                value="true"
+                :label="'已完成（待核实）'"
+              />
+              <ElOption
+                data-ui-value="false"
+                value="false"
+                :label="'尚未完成（待核实）'"
+              /> </FormSelect></label
           ><label
-            >实际完成日期<input
+            >实际完成日期<FormDate
               v-model="form.actual_date"
-              type="date"
               :disabled="form.completion_flag !== 'true'"
               :required="form.completion_flag === 'true'"
+              :aria-label="'实际完成日期'"
           /></label>
         </div>
         <label
-          >来源 / 证据说明 *<textarea
+          >来源 / 证据说明 *<ElInput
             v-model="form.evidence_ref"
             required
             maxlength="500"
-            rows="2"
+            :rows="2"
+            type="textarea"
+            :aria-label="'来源 / 证据说明 *'"
           />
         </label>
         <p class="muted">
           来源说明不等于正式证据附件。提交不改变已核实事实，也不代表节点已完成。
         </p>
-        <button class="primary" :disabled="busy">提交实际记录</button>
+        <ElButton
+          class="primary"
+          :disabled="busy"
+          native-type="submit"
+          type="primary"
+          >提交实际记录</ElButton
+        >
       </form>
     </section>
     <section class="form-section" data-node-section="records">
@@ -224,7 +252,12 @@ onMounted(load);
       <p class="notice warning">
         仅本项目审核人员可以核实；提交人不能核实自己的记录。
       </p>
-      <label>核实意见<input v-model="comment" maxlength="2000" /></label>
+      <label
+        >核实意见<ElInput
+          v-model="comment"
+          maxlength="2000"
+          :aria-label="'核实意见'"
+      /></label>
       <div class="table-wrap">
         <table>
           <thead>
@@ -268,13 +301,25 @@ onMounted(load);
                   "
                   class="actions"
                 >
-                  <button :disabled="busy" @click="verify(a.id, 'verified')">
-                    确认核实</button
-                  ><button :disabled="busy" @click="verify(a.id, 'returned')">
-                    退回</button
-                  ><button :disabled="busy" @click="verify(a.id, 'disputed')">
+                  <ElButton
+                    :disabled="busy"
+                    @click="verify(a.id, 'verified')"
+                    native-type="submit"
+                  >
+                    确认核实</ElButton
+                  ><ElButton
+                    :disabled="busy"
+                    @click="verify(a.id, 'returned')"
+                    native-type="submit"
+                  >
+                    退回</ElButton
+                  ><ElButton
+                    :disabled="busy"
+                    @click="verify(a.id, 'disputed')"
+                    native-type="submit"
+                  >
                     争议
-                  </button>
+                  </ElButton>
                 </div>
                 <span v-else>已处理</span>
               </td>
@@ -323,7 +368,9 @@ onMounted(load);
       </details>
     </section>
     <template #footer
-      ><button :disabled="busy" @click="emit('close')">关闭</button></template
+      ><ElButton :disabled="busy" @click="emit('close')" native-type="submit"
+        >关闭</ElButton
+      ></template
     >
   </Modal>
 </template>

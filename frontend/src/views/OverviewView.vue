@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ElButton } from "element-plus/es/components/button/index";
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, errorMessage } from "../api";
@@ -63,16 +64,21 @@ onMounted(load);
           {{ auth.user?.demo_mode ? "模拟测试数据" : "业务数据" }}
         </p>
       </div>
-      <button
+      <ElButton
         class="primary"
         :disabled="!auth.user?.is_system_admin"
         @click="showForm = true"
+        native-type="submit"
+        type="primary"
       >
         <Icon name="imgVectorPlus" />新建项目
-      </button>
+      </ElButton>
     </div>
     <p v-if="error" class="error" role="alert">
-      {{ error }} <button :disabled="busy" @click="load">重试</button>
+      {{ error }}
+      <ElButton :disabled="busy" @click="load" native-type="submit"
+        >重试</ElButton
+      >
     </p>
     <p v-if="busy" class="card empty" role="status">
       正在加载项目、节点和待办…
@@ -142,9 +148,14 @@ onMounted(load);
           <div class="chart-legend">
             <span><i class="on-time" />按期完成</span
             ><span><i class="late" />延期完成</span
-            ><button class="text-button" @click="showBasis = true">
+            ><ElButton
+              class="text-button"
+              @click="showBasis = true"
+              native-type="submit"
+              link
+            >
               统计依据
-            </button>
+            </ElButton>
           </div>
         </section>
         <section class="card overview-todos" aria-labelledby="todo-title">
@@ -185,32 +196,37 @@ onMounted(load);
           <table>
             <thead>
               <tr>
-                <th>项目编号 / 名称</th>
+                <th>项目编号</th>
+                <th>项目名称</th>
                 <th>负责人</th>
-                <th>节点数量 / 已核实完成</th>
-                <th>当前计划 / 下一关键节点</th>
+                <th>节点数量</th>
+                <th>已核实完成</th>
+                <th>当前计划</th>
+                <th>下一关键节点</th>
+                <th>下一节点计划日期</th>
                 <th>状态</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="p in dashboard.projects" :key="p.id">
                 <td>
-                  <RouterLink :to="`/projects/${p.id}`"
-                    >{{ p.project_code }} · {{ p.project_name }}</RouterLink
-                  >
+                  <RouterLink :to="`/projects/${p.id}`">{{
+                    p.project_code
+                  }}</RouterLink>
+                </td>
+                <td>
+                  <RouterLink :to="`/projects/${p.id}`">{{
+                    p.project_name
+                  }}</RouterLink>
                 </td>
                 <td>{{ p.owner_name || "未指定" }}</td>
+                <td>{{ p.milestone_count }}</td>
                 <td>
-                  {{ p.milestone_count }} /
                   {{ p.counts ? p.counts.verified_completed : "无生效计划" }}
                 </td>
-                <td>
-                  <span>{{ p.current_plan_label || "尚无生效计划" }}</span
-                  ><small v-if="p.next_milestone" class="subline"
-                    >{{ p.next_milestone.milestone_name }} ·
-                    {{ p.next_milestone.planned_date }}</small
-                  >
-                </td>
+                <td>{{ p.current_plan_label || "尚无生效计划" }}</td>
+                <td>{{ p.next_milestone?.milestone_name || "—" }}</td>
+                <td>{{ p.next_milestone?.planned_date || "—" }}</td>
                 <td><StatusBadge :value="p.project_status" /></td>
               </tr>
             </tbody>

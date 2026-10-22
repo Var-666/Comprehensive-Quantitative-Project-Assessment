@@ -1,5 +1,14 @@
 <script setup lang="ts">
+import { ElInput } from "element-plus/es/components/input/index";
+import { ElCheckbox } from "element-plus/es/components/checkbox/index";
+import { ElButton } from "element-plus/es/components/button/index";
 import { computed, ref } from "vue";
+import {
+  ElUpload,
+  type UploadFile,
+  type UploadInstance,
+  type UploadRawFile,
+} from "element-plus/es/components/upload/index";
 import { api, errorMessage, json } from "../api";
 import type { Batch } from "../types";
 import Modal from "./Modal.vue";
@@ -40,8 +49,13 @@ const mapping = ref<Record<string, string>>(
 );
 const committed = computed(() => !!batch.value?.result_json);
 const idempotencyKey = crypto.randomUUID();
-function choose(event: Event) {
-  file.value = (event.target as HTMLInputElement).files?.[0];
+const upload = ref<UploadInstance>();
+function choose(value: UploadFile) {
+  file.value = value.raw;
+}
+function replace(files: File[]) {
+  upload.value?.clearFiles();
+  upload.value?.handleStart(files[0] as UploadRawFile);
 }
 async function preview() {
   if (!file.value) {
@@ -113,12 +127,16 @@ async function commit() {
     <template v-if="!batch">
       <section class="form-section">
         <h3>文件来源（仅本地演示）</h3>
-        <input
-          type="file"
+        <ElUpload
+          ref="upload"
           accept=".xlsx"
-          aria-label="Excel 文件"
-          @change="choose"
-        />
+          :auto-upload="false"
+          :limit="1"
+          :on-change="choose"
+          :on-remove="() => (file = undefined)"
+          :on-exceed="replace"
+          ><ElButton native-type="button">选择 Excel 文件</ElButton></ElUpload
+        >
         <p class="muted">
           仅 .xlsx，最大 5MB，最多 2,000 行。默认映射适配提供的模拟工作簿。
         </p>
@@ -126,15 +144,17 @@ async function commit() {
       <section class="form-section">
         <div class="form-grid">
           <label
-            >工作表名称<input
+            >工作表名称<ElInput
               v-model="sheet"
-              placeholder="留空使用首个工作表" /></label
+              placeholder="留空使用首个工作表"
+              :aria-label="'工作表名称'" /></label
           ><label
-            >表头行号<input
+            >表头行号<ElInput
               v-model.number="header"
               type="number"
               min="1"
               max="50"
+              :aria-label="'表头行号'"
           /></label>
         </div>
       </section>
@@ -155,7 +175,10 @@ async function commit() {
               <tr v-for="(_, field) in mapping" :key="field">
                 <td>{{ field }}</td>
                 <td>
-                  <input v-model="mapping[field]" :aria-label="String(field)" />
+                  <ElInput
+                    v-model="mapping[field]"
+                    :aria-label="String(field)"
+                  />
                 </td>
               </tr>
             </tbody>
@@ -209,43 +232,48 @@ async function commit() {
         download
         >下载错误行 CSV</a
       >
-      <label v-if="!committed && !batch.error_rows" class="check"
-        ><input
-          v-model="confirmed"
-          type="checkbox"
-        />我已核对预览，确认将合法数据写入本地演示库</label
+      <ElCheckbox
+        v-if="!committed && !batch.error_rows"
+        class="check"
+        v-model="confirmed"
+        >我已核对预览，确认将合法数据写入本地演示库</ElCheckbox
       >
     </template>
     <template #footer>
-      <button :disabled="busy" @click="emit('close')">
+      <ElButton :disabled="busy" @click="emit('close')" native-type="submit">
         {{ committed ? "完成" : "取消" }}
-      </button>
-      <button
+      </ElButton>
+      <ElButton
         v-if="batch && !committed"
         :disabled="busy"
         @click="
           batch = undefined;
           confirmed = false;
         "
+        native-type="submit"
       >
         重新选择文件
-      </button>
-      <button
+      </ElButton>
+      <ElButton
         v-if="!batch"
         class="primary"
         :disabled="busy || !file"
         @click="preview"
+        native-type="submit"
+        type="primary"
       >
         {{ busy ? "校验中…" : "下一步：校验预览" }}
-      </button>
-      <button
+      </ElButton>
+      <ElButton
         v-else-if="!committed"
         class="primary"
         :disabled="busy || !!batch.error_rows || !confirmed"
         @click="commit"
+        native-type="submit"
+        type="primary"
       >
         {{ busy ? "写入中…" : "确认导入" }}
-      </button>
+      </ElButton>
     </template>
   </Modal>
 </template>
